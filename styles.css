@@ -200,7 +200,8 @@ h1, h2, h3, .title-font { font-family: var(--font-title); font-weight: 400; lett
   max-width: 532px;
   height: var(--tab-h);
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   gap: 2px;
   padding: 7px 8px;
   background: rgba(255, 255, 255, 0.94);
@@ -231,6 +232,7 @@ h1, h2, h3, .title-font { font-family: var(--font-title); font-weight: 400; lett
   transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease;
 }
 .tab-btn .tab-ico { font-size: 20px; line-height: 1; transition: transform 0.18s ease; }
+.tab-btn > span:last-child { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tab-btn.is-active { color: #6B4E3D; background: linear-gradient(180deg, #FFF3E2, #FFE9D4); }
 .tab-btn.is-active .tab-ico { transform: translateY(-1px) scale(1.12); }
 .tab-btn:active { transform: scale(0.96); }
@@ -900,6 +902,175 @@ h1, h2, h3, .title-font { font-family: var(--font-title); font-weight: 400; lett
 }
 .rec-dot { width: 8px; height: 8px; border-radius: 50%; background: #E2654E; animation: pulse 1s infinite; }
 
+/* ---------------- 함께: 가족 달력 · 체크리스트 ---------------- */
+
+.seg {
+  display: flex; gap: 6px;
+  padding: 5px;
+  background: #fff;
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  box-shadow: var(--shadow-tiny);
+}
+.seg-btn {
+  flex: 1 1 0; min-width: 0;
+  border: 0; background: transparent;
+  border-radius: 999px;
+  min-height: 38px;
+  padding: 8px 6px;
+  font-family: var(--font-title);
+  font-size: 13px;
+  color: var(--ink-faint);
+  white-space: nowrap;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+.seg-btn.is-active { background: linear-gradient(180deg, #FFF3E2, #FFE6CE); color: #6B4E3D; }
+.seg-btn:active { transform: scale(0.985); }
+
+.cal-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 12px; }
+.cal-center { display: flex; align-items: center; gap: 8px; }
+.cal-month { font-family: var(--font-title); font-size: 17px; color: #4A3B34; }
+.cal-arrow {
+  width: 38px; height: 38px; flex: 0 0 auto;
+  border-radius: 50%;
+  border: 1.5px solid var(--line-strong);
+  background: #fff; color: var(--ink-soft);
+  font-size: 18px; line-height: 1;
+  box-shadow: var(--shadow-tiny);
+}
+.cal-arrow:active { transform: scale(0.94); }
+.cal-today {
+  border: 1.5px solid var(--line-strong);
+  background: #fff; border-radius: 999px;
+  padding: 6px 12px; min-height: 30px;
+  font-size: 11.5px; color: var(--ink-soft);
+}
+
+.cal-dow { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-top: 12px; }
+.cal-dow span { text-align: center; font-size: 11px; color: var(--ink-faint); }
+.cal-dow span.sun { color: #E0778F; }
+.cal-dow span.sat { color: #6FA8C9; }
+
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-top: 6px; }
+.cal-cell {
+  position: relative;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 3px;
+  min-height: 46px;
+  padding: 5px 1px 4px;
+  border: 1.5px solid transparent;
+  border-radius: 14px;
+  background: #FFFDFA;
+  color: var(--ink);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.cal-cell:active { transform: scale(0.97); }
+.cal-cell .cal-num { font-family: var(--font-num); font-size: 13.5px; line-height: 1.1; }
+.cal-cell.is-out { color: #D3C4B8; background: transparent; }
+.cal-cell.is-today { border-color: #F5B9CD; background: #FFF0F5; }
+.cal-cell.is-today .cal-num { color: #C2557C; }
+.cal-cell.is-selected { border-color: #E7B98D; background: #FFF4E4; box-shadow: var(--shadow-tiny); }
+.cal-cell.is-selected .cal-num { color: #8A5A2B; }
+.cal-dots { display: flex; gap: 2px; min-height: 6px; align-items: center; }
+.cal-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--pink); }
+.cal-dot.who-all { background: var(--yellow); }
+.cal-dot.who-mom { background: var(--purple); }
+.cal-dot.who-dad { background: var(--mint); }
+.cal-dot.who-dain { background: var(--pink); }
+.cal-more { font-size: 9px; line-height: 1; color: var(--ink-faint); }
+.cal-legend { margin-top: 10px; font-size: 11px; color: var(--ink-faint); }
+
+.day-events { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.event-row {
+  display: flex; align-items: flex-start; gap: 9px;
+  padding: 9px 10px;
+  border: 1.5px solid var(--line);
+  border-radius: 16px;
+  background: #FFFDFA;
+}
+.event-row .event-time {
+  flex: 0 0 auto;
+  font-family: var(--font-num);
+  font-size: 11.5px;
+  color: #7E63C4;
+  background: var(--purple-soft);
+  border-radius: 999px;
+  padding: 3px 9px;
+  white-space: nowrap;
+}
+.event-row .event-time.is-allday { color: #B97615; background: var(--yellow-soft); }
+.event-body { flex: 1 1 auto; min-width: 0; }
+.event-title { display: block; font-size: 14px; color: var(--ink); overflow-wrap: anywhere; }
+.event-meta { display: block; margin-top: 2px; font-size: 11px; color: var(--ink-faint); overflow-wrap: anywhere; }
+
+.check-inline { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-soft); white-space: nowrap; }
+.check-inline input { width: 18px; height: 18px; accent-color: var(--pink); }
+.field input[type="date"],
+.field input[type="time"],
+.field select {
+  border: 1.5px solid var(--line-strong);
+  background: #fff;
+  border-radius: 14px;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-family: var(--font-body);
+  color: var(--ink);
+  outline: none;
+  max-width: 100%;
+}
+.field input[type="date"]:focus,
+.field input[type="time"]:focus,
+.field select:focus { border-color: #F5B9CD; box-shadow: 0 0 0 3px rgba(245, 143, 178, 0.14); }
+.field input:disabled { background: #F8F1E9; color: var(--ink-faint); }
+
+.cl-wrap { display: flex; flex-direction: column; gap: 14px; }
+.cl-head { display: flex; align-items: center; gap: 9px; }
+.cl-emoji { font-size: 24px; line-height: 1; }
+.cl-title { font-family: var(--font-title); font-size: 16px; color: #4A3B34; }
+.cl-sub { font-size: 11.5px; color: var(--ink-faint); margin-top: 1px; }
+.cl-items { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.cl-item {
+  display: flex; align-items: center; gap: 9px;
+  padding: 7px 10px;
+  border: 1.5px solid var(--line);
+  border-radius: 14px;
+  background: #FFFDFA;
+}
+.cl-item .check-btn { width: 26px; height: 26px; font-size: 12px; flex: 0 0 auto; }
+.cl-item .txt { flex: 1 1 auto; min-width: 0; font-size: 13.5px; color: var(--ink); overflow-wrap: anywhere; }
+.cl-item.done { background: #F4FBF6; border-color: #D6EFDD; }
+.cl-item.done .txt { color: var(--ink-faint); text-decoration: line-through; text-decoration-color: #CFE6D6; }
+.cl-item.done .check-btn { background: linear-gradient(180deg, #8FD79E, #62B980); border-color: #62B980; color: #fff; }
+.cl-empty { padding: 6px 2px; font-size: 12.5px; color: var(--ink-faint); }
+.cl-add { display: flex; gap: 6px; margin-top: 10px; }
+.cl-add input {
+  flex: 1 1 auto; min-width: 0;
+  border: 1.5px solid var(--line-strong);
+  border-radius: 12px;
+  padding: 9px 11px;
+  font-size: 13.5px;
+  font-family: var(--font-body);
+  background: #fff;
+  outline: none;
+}
+.cl-add input:focus { border-color: #F5B9CD; box-shadow: 0 0 0 3px rgba(245, 143, 178, 0.14); }
+.cl-foot { display: flex; justify-content: flex-end; margin-top: 8px; }
+.cl-count { font-family: var(--font-num); font-size: 11.5px; color: #C2557C; flex: 0 0 auto; }
+.up-date { font-family: var(--font-num); font-size: 12.5px; color: #C2557C; font-weight: 400; }
+
+.emoji-pick { display: flex; flex-wrap: wrap; gap: 6px; }
+.emoji-opt {
+  display: flex; align-items: center; gap: 5px;
+  border: 1.5px solid var(--line-strong);
+  background: #fff;
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-size: 15px;
+  color: var(--ink-soft);
+  min-height: 38px;
+}
+.emoji-opt span { font-size: 12px; font-family: var(--font-title); }
+.emoji-opt.is-on { border-color: #F5B9CD; background: #FFF0F5; color: #C2557C; }
+
 /* ---------------- gate (기기 프로필 선택) ---------------- */
 
 .gate {
@@ -1078,6 +1249,18 @@ h1, h2, h3, .title-font { font-family: var(--font-title); font-weight: 400; lett
   .dex-grid { grid-template-columns: repeat(4, 1fr); }
   .todo-people { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; align-items: start; }
 
+  #togetherContent[data-sub="calendar"] {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+    gap: 14px;
+    align-items: start;
+  }
+  .cl-wrap { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+  .cal-cell { min-height: 54px; padding: 6px 2px 5px; }
+  .cal-cell .cal-num { font-size: 15px; }
+  .seg-btn { font-size: 14px; }
+  .cal-month { font-size: 19px; }
+
   .modal-root { align-items: center; padding: 24px; }
   .modal { border-radius: 26px; max-height: 82vh; animation: popIn 0.24s ease both; }
   .modal.center { max-width: 420px; }
@@ -1098,6 +1281,17 @@ h1, h2, h3, .title-font { font-family: var(--font-title); font-weight: 400; lett
   .tabbar { height: 58px; }
   .tab-btn .tab-ico { font-size: 17px; }
   .tab-btn { font-size: 9.5px; }
+}
+
+/* narrow phones (360px 안팎): 탭 6개가 깨지지 않게 */
+@media (max-width: 380px) {
+  .tabbar { padding-left: 6px; padding-right: 6px; }
+  .tab-btn { font-size: 9.5px; gap: 2px; }
+  .tab-btn .tab-ico { font-size: 18px; }
+  .cal-cell { min-height: 42px; border-radius: 12px; }
+  .cal-cell .cal-num { font-size: 12.5px; }
+  .event-row { padding: 8px; gap: 7px; }
+  .seg-btn { font-size: 12px; padding: 8px 4px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

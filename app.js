@@ -176,6 +176,26 @@
   var DOW_KO = ["일", "월", "화", "수", "목", "금", "토"];
   var DEFAULT_NAMES = { dain: "다인이", mom: "엄마", dad: "아빠" };
 
+  var EVENT_WHO = [
+    { id: "all",  label: "가족 모두", emoji: "🏡" },
+    { id: "dain", label: "다인이",    emoji: "🎀" },
+    { id: "mom",  label: "엄마",      emoji: "💐" },
+    { id: "dad",  label: "아빠",      emoji: "🧢" }
+  ];
+
+  var LIST_PRESETS = [
+    { emoji: "🛒", title: "장보기" },
+    { emoji: "🎒", title: "준비물" },
+    { emoji: "🚗", title: "외출 준비물" },
+    { emoji: "🧳", title: "여행 챙길 것" },
+    { emoji: "🍳", title: "이번 주 집안일" }
+  ];
+
+  var DEFAULT_LISTS = [
+    { emoji: "🛒", title: "장보기" },
+    { emoji: "🎒", title: "외출 준비물" }
+  ];
+
   /* ---------- 작은 도구 ---------- */
   function qs(sel, root) { return (root || document).querySelector(sel); }
   function qsa(sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); }
@@ -213,6 +233,105 @@
   }
 
   function pad2(n) { return (n < 10 ? "0" : "") + n; }
+
+  /* ---------- 달력 날짜 도구 ---------- */
+  function keyOfParts(y, m, d) { return y + "-" + pad2(m + 1) + "-" + pad2(d); }
+
+  function splitKey(key) {
+    var p = String(key || "").split("-");
+    return { y: Number(p[0]), m: Number(p[1]) - 1, d: Number(p[2]) };
+  }
+
+  function isDateKey(key) { return /^\d{4}-\d{2}-\d{2}$/.test(String(key || "")); }
+
+  // 일요일 시작 방식으로 6주(42칸) 달력 칸을 만든다
+  function monthCells(y, m) {
+    var lead = new Date(Date.UTC(y, m, 1)).getUTCDay();
+    var startMs = Date.UTC(y, m, 1) - lead * DAY_MS;
+    var cells = [];
+    for (var i = 0; i < 42; i++) {
+      var dt = new Date(startMs + i * DAY_MS);
+      cells.push({
+        key: keyOfParts(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate()),
+        day: dt.getUTCDate(),
+        inMonth: dt.getUTCMonth() === m && dt.getUTCFullYear() === y,
+        dow: i % 7
+      });
+    }
+    return cells;
+  }
+
+  function fmtTime12(t) {
+    var m = /^(\d{1,2}):(\d{2})$/.exec(String(t || ""));
+    if (!m) return "";
+    var h = Number(m[1]);
+    var ampm = h < 12 ? "오전" : "오후";
+    var hh = h % 12; if (hh === 0) hh = 12;
+    return ampm + " " + hh + ":" + m[2];
+  }
+
+  function fmtDayLabel(key) {
+    var p = splitKey(key);
+    if (!p.y || !p.d) return "";
+    return (p.m + 1) + "월 " + p.d + "일 " + DOW_KO[dowOfKey(key)] + "요일";
+  }
+
+  function whoInfo(id) {
+    return EVENT_WHO.find(function (w) { return w.id === id; }) || EVENT_WHO[0];
+  }
+
+  function defaultLists() {
+    return DEFAULT_LISTS.map(function (p) {
+      return { id: uid("cl"), emoji: p.emoji, title: p.title, items: [], by: "", createdAt: new Date().toISOString() };
+    });
+  }
+
+  // 옛 기록(달력·체크리스트 필드 없음)도 안전하게 읽어 들인다
+  function normalizeEvents(list) {
+    return (Array.isArray(list) ? list : []).filter(function (ev) {
+      return ev && ev.id && isDateKey(ev.date);
+    }).map(function (ev) {
+      var time = /^\d{1,2}:\d{2}$/.test(String(ev.time || "")) ? String(ev.time) : "";
+      return {
+        id: ev.id,
+        date: ev.date,
+        title: String(ev.title == null ? "" : ev.title).slice(0, 40) || "(제목 없음)",
+        allDay: ev.allDay === undefined ? !time : !!ev.allDay,
+        time: time,
+        who: EVENT_WHO.some(function (w) { return w.id === ev.who; }) ? ev.who : "all",
+        by: ev.by || "",
+        note: String(ev.note == null ? "" : ev.note).slice(0, 60),
+        createdAt: ev.createdAt || "",
+        updatedAt: ev.updatedAt || ""
+      };
+    });
+  }
+
+  function normalizeLists(list) {
+    return (Array.isArray(list) ? list : []).filter(function (l) {
+      return l && l.id && l.title;
+    }).map(function (l) {
+      return {
+        id: l.id,
+        emoji: l.emoji || "📝",
+        title: String(l.title).slice(0, 20),
+        by: l.by || "",
+        createdAt: l.createdAt || "",
+        items: (Array.isArray(l.items) ? l.items : []).filter(function (it) {
+          return it && it.id && String(it.text || "").trim();
+        }).map(function (it) {
+          return {
+            id: it.id,
+            text: String(it.text).slice(0, 40),
+            done: !!it.done,
+            doneAt: it.doneAt || "",
+            by: it.by || "",
+            createdAt: it.createdAt || ""
+          };
+        })
+      };
+    });
+  }
 
   function mmss(totalSec) {
     var s = Math.max(0, Math.floor(totalSec));
@@ -277,6 +396,8 @@
       },
       todos: { dain: [], mom: [], dad: [] },
       chat: [],
+      calendar: { events: [] },          // 가족 공유 달력 일정
+      checklists: { lists: defaultLists() }, // 가족 공유 체크리스트
       settings: { weatherCache: null }
     };
   }
@@ -302,6 +423,12 @@
     if (!s.badges) { s.badges = {}; changed = true; }
     if (!s.dex) { s.dex = { unlocked: {}, seen: {} }; changed = true; }
     if (!s.todos) { s.todos = { dain: [], mom: [], dad: [] }; changed = true; }
+    if (!s.calendar || typeof s.calendar !== "object") { s.calendar = { events: [] }; changed = true; }
+    if (!Array.isArray(s.calendar.events)) { s.calendar.events = []; changed = true; }
+    if (!s.checklists || typeof s.checklists !== "object" || !Array.isArray(s.checklists.lists)) {
+      s.checklists = { lists: defaultLists() };
+      changed = true;
+    }
     if (!s.chat) { s.chat = []; changed = true; }
     if (!s.members || !s.members.length) { s.members = JSON.parse(JSON.stringify(CFG.defaultMembers)); changed = true; }
     return changed;
@@ -312,10 +439,12 @@
     if (!s) s = freshState();
     // 알려진 필드만 유지 (이상한 데이터 방어)
     var out = freshState();
-    ["members", "study", "stamps", "badges", "dex", "mission", "todos", "chat", "settings"].forEach(function (k) {
+    ["members", "study", "stamps", "badges", "dex", "mission", "todos", "chat", "calendar", "checklists", "settings"].forEach(function (k) {
       if (s[k] !== undefined) out[k] = s[k];
     });
     rollDailyState(out);
+    out.calendar.events = normalizeEvents(out.calendar.events);
+    out.checklists.lists = normalizeLists(out.checklists.lists);
     return out;
   }
 
@@ -703,6 +832,15 @@
       '</div>';
     grid.appendChild(todoSnap);
 
+    // 다가오는 일정 + 함께 체크리스트 요약
+    var upWrap = el("div");
+    upWrap.innerHTML = upcomingCardHtml();
+    grid.appendChild(upWrap);
+
+    var chkWrap = el("div");
+    chkWrap.innerHTML = checklistSummaryHtml();
+    grid.appendChild(chkWrap);
+
     // 히어로 인사말 (상단)
     var me = memberById(meId);
     var greet = el("div");
@@ -1076,6 +1214,12 @@
     root.appendChild(mCard);
 
     // 할 일
+    var todoHead = el("div", "section-head");
+    todoHead.style.padding = "2px 6px 0";
+    todoHead.innerHTML = '<div class="section-title"><span class="ico">🗒️</span>각자 오늘 할 일</div>' +
+      '<span class="section-note">함께 쓰는 목록은 ‘함께’ 탭에 있어요</span>';
+    root.appendChild(todoHead);
+
     var todos = el("div", "todo-people");
     ["dain", "mom", "dad"].forEach(function (pid) {
       var list = state.todos[pid] || [];
@@ -1126,6 +1270,371 @@
     input.addEventListener("keydown", function (e) {
       if (e.key === "Enter") qs("#todoSaveBtn").click();
     });
+  }
+
+  /* =========================================================
+     함께 — 가족 달력 + 함께 체크리스트
+     ========================================================= */
+  var TOGETHER_SUB = "calendar";
+  var calView = null;
+
+  function allEvents() { return (state.calendar && state.calendar.events) || []; }
+
+  function cmpEvent(a, b) {
+    if (!!a.allDay !== !!b.allDay) return a.allDay ? -1 : 1;
+    var at = a.allDay ? "" : String(a.time || "99:99");
+    var bt = b.allDay ? "" : String(b.time || "99:99");
+    if (at === bt) return String(a.title).localeCompare(String(b.title));
+    return at < bt ? -1 : 1;
+  }
+
+  function eventsOn(key) {
+    return allEvents().filter(function (e) { return e.date === key; }).sort(cmpEvent);
+  }
+
+  function ensureCalView() {
+    if (calView) return;
+    var p = splitKey(todayKey());
+    calView = { y: p.y, m: p.m, selected: todayKey() };
+  }
+
+  function calGoto(y, m) {
+    ensureCalView();
+    while (m < 0) { m += 12; y -= 1; }
+    while (m > 11) { m -= 12; y += 1; }
+    calView.y = y;
+    calView.m = m;
+  }
+
+  function renderTogether() {
+    var root = qs("#togetherContent");
+    if (!root) return;
+    ensureCalView();
+    qsa(".seg-btn").forEach(function (b) {
+      var on = b.getAttribute("data-sub") === TOGETHER_SUB;
+      b.classList.toggle("is-active", on);
+      b.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    root.setAttribute("data-sub", TOGETHER_SUB);
+    if (TOGETHER_SUB === "checklist") renderTogetherChecklist(root);
+    else renderTogetherCalendar(root);
+  }
+
+  function renderTogetherCalendar(root) {
+    root.innerHTML = "";
+    var byDay = {};
+    allEvents().forEach(function (e) {
+      if (!byDay[e.date]) byDay[e.date] = [];
+      byDay[e.date].push(e);
+    });
+
+    var cells = monthCells(calView.y, calView.m);
+    var today = todayKey();
+    var sel = calView.selected || today;
+
+    var calCard = el("div", "card");
+    calCard.innerHTML =
+      '<div class="section-head"><div class="section-title"><span class="ico">📅</span>가족 달력</div>' +
+        '<span class="section-note">누구나 일정을 넣을 수 있어요</span></div>' +
+      '<div class="cal-nav">' +
+        '<button class="cal-arrow" type="button" data-action="cal-month" data-delta="-1" aria-label="이전 달">‹</button>' +
+        '<div class="cal-center"><span class="cal-month" id="calMonthLabel">' + (calView.m + 1) + '월 ' + calView.y + '</span>' +
+          '<button class="cal-today" type="button" data-action="cal-today">오늘</button></div>' +
+        '<button class="cal-arrow" type="button" data-action="cal-month" data-delta="1" aria-label="다음 달">›</button>' +
+      '</div>' +
+      '<div class="cal-dow">' + DOW_KO.map(function (d, i) {
+        return '<span class="' + (i === 0 ? "sun" : i === 6 ? "sat" : "") + '">' + d + '</span>';
+      }).join("") + '</div>' +
+      '<div class="cal-grid" id="calGrid">' + cells.map(function (c) {
+        var evs = byDay[c.key] || [];
+        var cls = "cal-cell" + (c.inMonth ? "" : " is-out") +
+          (c.key === today ? " is-today" : "") +
+          (c.key === sel ? " is-selected" : "") +
+          (evs.length ? " has-events" : "");
+        var dots = evs.slice(0, 3).map(function (e) {
+          return '<i class="cal-dot who-' + esc(e.who || "all") + '"></i>';
+        }).join("");
+        return '<button class="' + cls + '" type="button" data-action="cal-pick" data-date="' + esc(c.key) + '"' +
+          ' aria-pressed="' + (c.key === sel ? "true" : "false") + '"' +
+          ' aria-label="' + esc(fmtDayLabel(c.key) + (evs.length ? " · 일정 " + evs.length + "개" : "")) + '">' +
+          '<span class="cal-num">' + c.day + '</span>' +
+          '<span class="cal-dots">' + dots + '</span>' +
+          (evs.length > 3 ? '<span class="cal-more">+' + (evs.length - 3) + '</span>' : "") +
+        '</button>';
+      }).join("") + '</div>' +
+      '<p class="cal-legend">🏡 가족 모두 · 🎀 다인이 · 💐 엄마 · 🧢 아빠</p>';
+    root.appendChild(calCard);
+
+    var dayCard = el("div", "card");
+    var dayEvents = eventsOn(sel);
+    dayCard.innerHTML =
+      '<div class="section-head"><div class="section-title"><span class="ico">📌</span>' + esc(fmtDayLabel(sel)) + '</div>' +
+        '<button class="btn btn-xs btn-primary" type="button" data-action="add-event" data-date="' + esc(sel) + '">+ 일정 추가</button></div>' +
+      '<div class="day-events" id="dayEvents">' +
+        (dayEvents.length ? dayEvents.map(eventRowHtml).join("") :
+          '<p class="muted" style="padding:4px 2px">이 날은 아직 일정이 없어요. 가족과 함께 넣어 봐요 🌿</p>') +
+      '</div>';
+    root.appendChild(dayCard);
+  }
+
+  function eventRowHtml(e) {
+    var w = whoInfo(e.who);
+    var timeLabel = e.allDay ? "종일" : (fmtTime12(e.time) || "시간 미정");
+    var byName = e.by ? memberName(e.by) : "";
+    return '<div class="event-row who-' + esc(w.id) + '">' +
+      '<span class="event-time' + (e.allDay ? " is-allday" : "") + '">' + esc(timeLabel) + '</span>' +
+      '<div class="event-body">' +
+        '<span class="event-title">' + esc(e.title) + '</span>' +
+        '<span class="event-meta">' + w.emoji + " " + esc(w.label) +
+          (byName ? " · " + esc(byName) + "가 넣음" : "") +
+          (e.note ? " · " + esc(e.note) : "") + '</span>' +
+      '</div>' +
+      '<div class="item-actions">' +
+        '<button class="mini-icon" type="button" data-action="edit-event" data-id="' + esc(e.id) + '" aria-label="일정 수정">✏️</button>' +
+        '<button class="mini-icon" type="button" data-action="delete-event" data-id="' + esc(e.id) + '" aria-label="일정 삭제">🗑️</button>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function openEventModal(existing, dateKey) {
+    var isEdit = !!existing;
+    var date = isEdit ? existing.date : (dateKey || (calView && calView.selected) || todayKey());
+    if (!isDateKey(date)) date = todayKey();
+    var allDay = isEdit ? !!existing.allDay : false;
+    var time = isEdit ? (existing.time || "") : "";
+    var who = isEdit ? (existing.who || "all") : "all";
+    openModal(
+      '<div class="field"><label for="evTitle">일정 제목</label>' +
+        '<input type="text" id="evTitle" maxlength="40" placeholder="예: 다인이 유치원 소풍" value="' + esc(isEdit ? existing.title : "") + '"></div>' +
+      '<div class="field"><label for="evDate">날짜</label>' +
+        '<input type="date" id="evDate" value="' + esc(date) + '"></div>' +
+      '<div class="field"><label for="evTime">시간</label>' +
+        '<div class="row" style="gap:10px">' +
+          '<input type="time" id="evTime" value="' + esc(time) + '"' + (allDay ? " disabled" : "") + '>' +
+          '<label class="check-inline"><input type="checkbox" id="evAllDay"' + (allDay ? " checked" : "") + '> 종일</label>' +
+        '</div></div>' +
+      '<div class="field"><label for="evWho">누구 일정인가요?</label>' +
+        '<select id="evWho">' + EVENT_WHO.map(function (w) {
+          return '<option value="' + w.id + '"' + (w.id === who ? " selected" : "") + '>' + w.emoji + ' ' + esc(w.label) + '</option>';
+        }).join("") + '</select></div>' +
+      '<div class="field"><label for="evNote">메모 (선택)</label>' +
+        '<input type="text" id="evNote" maxlength="60" placeholder="예: 준비물 가방 챙기기" value="' + esc(isEdit ? (existing.note || "") : "") + '"></div>' +
+      '<div class="modal-actions">' +
+        '<button class="btn btn-ghost" type="button" data-action="close-modal">취소</button>' +
+        '<button class="btn btn-primary" type="button" id="evSaveBtn">' + (isEdit ? "저장" : "추가") + '</button>' +
+      '</div>',
+      { title: isEdit ? "일정 수정" : "일정 추가" }
+    );
+
+    var allDayBox = qs("#evAllDay");
+    allDayBox.addEventListener("change", function () {
+      var timeInput = qs("#evTime");
+      timeInput.disabled = allDayBox.checked;
+      if (allDayBox.checked) timeInput.value = "";
+    });
+
+    var save = function () {
+      var title = qs("#evTitle").value.trim();
+      var dkey = qs("#evDate").value;
+      if (!title) { toast("일정 제목을 넣어 주세요", "✏️"); return; }
+      if (!isDateKey(dkey)) { toast("날짜를 골라 주세요", "📅"); return; }
+      var isAll = allDayBox.checked;
+      var t = isAll ? "" : qs("#evTime").value;
+      var whoId = qs("#evWho").value;
+      var note = qs("#evNote").value.trim();
+      if (isEdit) {
+        existing.title = title; existing.date = dkey; existing.allDay = isAll;
+        existing.time = t; existing.who = whoId; existing.note = note;
+        existing.updatedAt = new Date().toISOString();
+      } else {
+        state.calendar.events.push({
+          id: uid("ev"), title: title, date: dkey, allDay: isAll, time: t,
+          who: whoId, by: meId || "", note: note,
+          createdAt: new Date().toISOString(), updatedAt: ""
+        });
+      }
+      var p = splitKey(dkey);
+      calGoto(p.y, p.m);
+      calView.selected = dkey;
+      TOGETHER_SUB = "calendar";
+      closeModal();
+      persist(true);
+      renderAll();
+      toast(isEdit ? "일정을 고쳤어요" : "일정을 넣었어요!", "📅");
+    };
+
+    qs("#evSaveBtn").addEventListener("click", save);
+    var titleInput = qs("#evTitle");
+    titleInput.focus();
+    titleInput.addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter") { ev.preventDefault(); save(); }
+    });
+  }
+
+  /* ---------- 함께 체크리스트 ---------- */
+  function renderTogetherChecklist(root) {
+    root.innerHTML = "";
+    var lists = (state.checklists && state.checklists.lists) || [];
+
+    var head = el("div", "card tight");
+    head.innerHTML =
+      '<div class="section-head"><div class="section-title"><span class="ico">✅</span>함께 체크리스트</div>' +
+        '<button class="btn btn-sm btn-primary" type="button" data-action="add-list">+ 새 리스트</button></div>' +
+      '<p class="muted" style="margin-top:6px">가족 모두가 함께 채우는 목록이에요. 각자 할 일은 ‘미션’ 탭에서 봐요.</p>';
+    root.appendChild(head);
+
+    if (!lists.length) {
+      var empty = el("div", "card center");
+      empty.innerHTML = '<p style="font-size:32px">🧺</p>' +
+        '<p class="muted" style="margin-top:6px"><b>+ 새 리스트</b>로 장보기·준비물 목록을 만들어요.</p>';
+      root.appendChild(empty);
+      return;
+    }
+
+    var wrap = el("div", "cl-wrap");
+    lists.forEach(function (list) { wrap.appendChild(checklistCard(list)); });
+    root.appendChild(wrap);
+  }
+
+  function checklistCard(list) {
+    var items = list.items || [];
+    var done = items.filter(function (i) { return i.done; }).length;
+    var pct = items.length ? Math.round(done / items.length * 100) : 0;
+    var card = el("div", "card checklist");
+    card.setAttribute("data-list-card", list.id);
+    card.innerHTML =
+      '<div class="cl-head">' +
+        '<span class="cl-emoji">' + esc(list.emoji || "📝") + '</span>' +
+        '<div class="grow">' +
+          '<div class="cl-title">' + esc(list.title) + '</div>' +
+          '<div class="cl-sub">' + (items.length
+            ? done + " / " + items.length + " 완료" + (items.length - done ? " · 남은 " + (items.length - done) + "개" : " · 다 했어요!")
+            : "항목을 넣어 보세요") + '</div>' +
+        '</div>' +
+        '<button class="mini-icon" type="button" data-action="rename-list" data-id="' + esc(list.id) + '" aria-label="리스트 이름 바꾸기">✏️</button>' +
+        '<button class="mini-icon" type="button" data-action="delete-list" data-id="' + esc(list.id) + '" aria-label="리스트 삭제">🗑️</button>' +
+      '</div>' +
+      '<div class="progress" style="margin-top:9px"><i style="width:' + pct + '%"></i></div>' +
+      '<div class="cl-items">' +
+        (items.length ? items.map(function (it) {
+          return '<div class="cl-item' + (it.done ? " done" : "") + '">' +
+            '<button class="check-btn" type="button" data-action="toggle-cl-item" data-list="' + esc(list.id) + '" data-id="' + esc(it.id) + '" aria-label="체크">✓</button>' +
+            '<span class="txt">' + esc(it.text) + '</span>' +
+            '<button class="mini-icon" type="button" data-action="delete-cl-item" data-list="' + esc(list.id) + '" data-id="' + esc(it.id) + '" aria-label="삭제">🗑️</button>' +
+          '</div>';
+        }).join("") : '<p class="cl-empty">아직 항목이 없어요</p>') +
+      '</div>' +
+      '<form class="cl-add" data-list="' + esc(list.id) + '" autocomplete="off">' +
+        '<input type="text" name="text" maxlength="40" placeholder="항목 추가 (예: 우유)" aria-label="' + esc(list.title) + ' 항목">' +
+        '<button class="btn btn-xs btn-soft" type="submit">추가</button>' +
+      '</form>' +
+      (done ? '<div class="cl-foot"><button class="btn btn-xs btn-ghost" type="button" data-action="clear-done" data-id="' + esc(list.id) + '">완료 ' + done + '개 정리</button></div>' : "");
+    return card;
+  }
+
+  function listById(id) {
+    return ((state.checklists && state.checklists.lists) || []).find(function (l) { return l.id === id; }) || null;
+  }
+
+  function addChecklistItem(listId, text) {
+    var list = listById(listId);
+    if (!list) return;
+    var t = String(text || "").trim();
+    if (!t) { toast("넣을 항목을 적어 주세요", "✏️"); return; }
+    list.items.push({ id: uid("it"), text: t.slice(0, 40), done: false, doneAt: "", by: meId || "", createdAt: new Date().toISOString() });
+    persist(true);
+    renderAll();
+    var inp = qs('form.cl-add[data-list="' + listId + '"] input');
+    if (inp) inp.focus();
+  }
+
+  function openListModal(existing) {
+    var isEdit = !!existing;
+    openModal(
+      '<div class="field"><label for="clTitle">리스트 이름</label>' +
+        '<input type="text" id="clTitle" maxlength="20" placeholder="예: 장보기" value="' + esc(isEdit ? existing.title : "") + '"></div>' +
+      '<div class="field"><label>그림 고르기</label>' +
+        '<div class="emoji-pick" id="clEmojiPick">' +
+          LIST_PRESETS.map(function (p, i) {
+            var on = isEdit ? (existing.emoji === p.emoji) : i === 0;
+            return '<button type="button" class="emoji-opt' + (on ? " is-on" : "") + '" data-emoji="' + esc(p.emoji) + '">' +
+              p.emoji + '<span>' + esc(p.title) + '</span></button>';
+          }).join("") +
+        '</div></div>' +
+      '<div class="modal-actions">' +
+        '<button class="btn btn-ghost" type="button" data-action="close-modal">취소</button>' +
+        '<button class="btn btn-primary" type="button" id="clSaveBtn">' + (isEdit ? "저장" : "만들기") + '</button>' +
+      '</div>',
+      { title: isEdit ? "리스트 이름 바꾸기" : "새 리스트" }
+    );
+
+    var picked = isEdit ? (existing.emoji || "📝") : LIST_PRESETS[0].emoji;
+    qsa("#clEmojiPick .emoji-opt").forEach(function (b) {
+      b.addEventListener("click", function () {
+        picked = b.getAttribute("data-emoji");
+        qsa("#clEmojiPick .emoji-opt").forEach(function (x) { x.classList.toggle("is-on", x === b); });
+      });
+    });
+
+    qs("#clSaveBtn").addEventListener("click", function () {
+      var title = qs("#clTitle").value.trim();
+      if (!title) { toast("리스트 이름을 넣어 주세요", "✏️"); return; }
+      if (isEdit) {
+        existing.title = title;
+        existing.emoji = picked;
+      } else {
+        state.checklists.lists.push({
+          id: uid("cl"), emoji: picked, title: title, items: [],
+          by: meId || "", createdAt: new Date().toISOString()
+        });
+      }
+      TOGETHER_SUB = "checklist";
+      closeModal();
+      persist(true);
+      renderAll();
+      toast(isEdit ? "이름을 바꿨어요" : "리스트를 만들었어요!", "🧺");
+    });
+    qs("#clTitle").focus();
+  }
+
+  /* ---------- 홈 요약 카드 ---------- */
+  function upcomingCardHtml() {
+    var today = todayKey();
+    var list = allEvents().filter(function (e) { return e.date >= today; }).sort(function (a, b) {
+      if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+      return cmpEvent(a, b);
+    }).slice(0, 3);
+
+    return '<div class="card tight">' +
+      '<div class="section-head"><div class="section-title"><span class="ico">🗓️</span>다가오는 일정</div>' +
+        '<button class="btn btn-xs btn-ghost" type="button" data-action="tab" data-tab="together" data-sub="calendar">달력 열기</button></div>' +
+      '<div class="mini-list" style="margin-top:10px">' +
+        (list.length ? list.map(function (e) {
+          var p = splitKey(e.date);
+          var w = whoInfo(e.who);
+          return '<div class="mini-row"><span class="check">' + w.emoji + '</span>' +
+            '<span class="txt"><b class="up-date">' + (p.m + 1) + '/' + p.d + '(' + DOW_KO[dowOfKey(e.date)] + ')</b> ' + esc(e.title) + '</span></div>';
+        }).join("") : '<div class="mini-row"><span class="check">🌿</span><span class="txt">아직 넣은 일정이 없어요 — 가족과 함께 넣어 봐요</span></div>') +
+      '</div></div>';
+  }
+
+  function checklistSummaryHtml() {
+    var lists = (state.checklists && state.checklists.lists) || [];
+    var rows = lists.slice(0, 3).map(function (l) {
+      var items = l.items || [];
+      var done = items.filter(function (i) { return i.done; }).length;
+      var left = items.length - done;
+      return '<div class="mini-row"><span class="check">' + esc(l.emoji || "📝") + '</span>' +
+        '<span class="txt">' + esc(l.title) + '</span>' +
+        '<span class="cl-count">' + (items.length ? (left ? left + "개 남음" : "완료") : "비었어요") + '</span></div>';
+    }).join("");
+
+    return '<div class="card tight">' +
+      '<div class="section-head"><div class="section-title"><span class="ico">✅</span>함께 체크리스트</div>' +
+        '<button class="btn btn-xs btn-ghost" type="button" data-action="tab" data-tab="together" data-sub="checklist">전체 보기</button></div>' +
+      '<div class="mini-list" style="margin-top:10px">' +
+        (rows || '<div class="mini-row"><span class="check">🧺</span><span class="txt">장보기·준비물 목록을 함께 채워요</span></div>') +
+      '</div></div>';
   }
 
   /* =========================================================
@@ -1428,8 +1937,12 @@
      ========================================================= */
   var CURRENT_TAB = "home";
 
-  function switchTab(tab) {
+  function switchTab(tab, sub) {
     CURRENT_TAB = tab;
+    if (tab === "together") {
+      if (sub === "calendar" || sub === "checklist") TOGETHER_SUB = sub;
+      renderTogether();
+    }
     qsa(".view").forEach(function (v) {
       v.classList.toggle("is-active", v.getAttribute("data-view") === tab);
     });
@@ -1447,6 +1960,7 @@
     renderStudy();
     renderDex();
     renderMission();
+    renderTogether();
     renderChat();
     renderStickerSheet();
     renderTodayLabel();
@@ -1464,9 +1978,10 @@
     var act = btn.getAttribute("data-action");
     var id = btn.getAttribute("data-id");
     var who = btn.getAttribute("data-who");
+    var listId = btn.getAttribute("data-list");
 
     switch (act) {
-      case "tab": switchTab(btn.getAttribute("data-tab")); break;
+      case "tab": switchTab(btn.getAttribute("data-tab"), btn.getAttribute("data-sub")); break;
 
       /* weather */
       case "refresh-weather": fetchWeather(true); toast("날씨를 새로 받아왔어요", "🌦️"); break;
@@ -1613,6 +2128,108 @@
         break;
       }
 
+      /* 함께 — 가족 달력 */
+      case "together-sub": {
+        TOGETHER_SUB = btn.getAttribute("data-sub") === "checklist" ? "checklist" : "calendar";
+        renderTogether();
+        break;
+      }
+      case "cal-month": {
+        ensureCalView();
+        var delta = Number(btn.getAttribute("data-delta")) || 0;
+        calGoto(calView.y, calView.m + delta);
+        renderTogether();
+        break;
+      }
+      case "cal-today": {
+        ensureCalView();
+        var tp = splitKey(todayKey());
+        calView.y = tp.y;
+        calView.m = tp.m;
+        calView.selected = todayKey();
+        renderTogether();
+        break;
+      }
+      case "cal-pick": {
+        ensureCalView();
+        var pickKey = btn.getAttribute("data-date");
+        if (!isDateKey(pickKey)) return;
+        var pickParts = splitKey(pickKey);
+        calView.y = pickParts.y;
+        calView.m = pickParts.m;
+        calView.selected = pickKey;
+        renderTogether();
+        break;
+      }
+      case "add-event": openEventModal(null, btn.getAttribute("data-date")); break;
+      case "edit-event": {
+        var ev = allEvents().find(function (x) { return x.id === id; });
+        if (ev) openEventModal(ev, null);
+        break;
+      }
+      case "delete-event": {
+        var evDel = allEvents().find(function (x) { return x.id === id; });
+        if (!evDel) return;
+        confirmModal("일정 삭제", "『" + evDel.title + "』 일정을 지울까요?", "삭제", function () {
+          state.calendar.events = allEvents().filter(function (x) { return x.id !== id; });
+          persist(true);
+          renderAll();
+          toast("일정을 지웠어요", "🗑️");
+        });
+        break;
+      }
+
+      /* 함께 — 체크리스트 */
+      case "add-list": openListModal(null); break;
+      case "rename-list": {
+        var l0 = listById(id);
+        if (l0) openListModal(l0);
+        break;
+      }
+      case "delete-list": {
+        var l1 = listById(id);
+        if (!l1) return;
+        confirmModal("리스트 삭제", "『" + l1.title + "』 리스트를 지울까요? 항목도 함께 지워져요.", "삭제", function () {
+          state.checklists.lists = state.checklists.lists.filter(function (x) { return x.id !== id; });
+          persist(true);
+          renderAll();
+          toast("리스트를 지웠어요", "🧺");
+        });
+        break;
+      }
+      case "toggle-cl-item": {
+        var l2 = listById(listId);
+        if (!l2) return;
+        var itm = (l2.items || []).find(function (x) { return x.id === id; });
+        if (!itm) return;
+        itm.done = !itm.done;
+        itm.doneAt = itm.done ? new Date().toISOString() : "";
+        persist(true);
+        renderAll();
+        break;
+      }
+      case "delete-cl-item": {
+        var l3 = listById(listId);
+        if (!l3) return;
+        l3.items = (l3.items || []).filter(function (x) { return x.id !== id; });
+        persist(true);
+        renderAll();
+        break;
+      }
+      case "clear-done": {
+        var l4 = listById(id);
+        if (!l4) return;
+        var doneCount = (l4.items || []).filter(function (x) { return x.done; }).length;
+        if (!doneCount) { toast("정리할 완료 항목이 없어요", "✅"); return; }
+        confirmModal("완료 항목 정리", "체크한 " + doneCount + "개를 목록에서 지울까요?", "정리하기", function () {
+          l4.items = (l4.items || []).filter(function (x) { return !x.done; });
+          persist(true);
+          renderAll();
+          toast(doneCount + "개를 정리했어요", "✨");
+        });
+        break;
+      }
+
       /* chat */
       case "toggle-stickers": {
         var sheet = qs("#stickerSheet");
@@ -1689,6 +2306,19 @@
     sendChat({ kind: "text", text: text });
     input.value = "";
     qs("#stickerSheet").hidden = true;
+  });
+
+  // 함께 체크리스트의 “항목 추가” 줄
+  document.addEventListener("submit", function (e) {
+    var form = e.target;
+    if (!form || !form.classList || !form.classList.contains("cl-add")) return;
+    e.preventDefault();
+    var input = form.querySelector("input");
+    if (!input) return;
+    var text = input.value;
+    var lid = form.getAttribute("data-list");
+    input.value = "";
+    addChecklistItem(lid, text);
   });
 
   /* ---------- 시작 ---------- */
