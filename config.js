@@ -51,8 +51,8 @@ window.FAMILY_CONFIG = {
        3대 기기(엄마 폰 · 아빠 폰 · 다인이 태블릿)가 실시간으로 같은 기록을 봅니다.
      준비물(SQL)은 README.md 참고. */
   supabase: {
-    url: "",                                   // 예: "https://abcdefghijk.supabase.co"
-    anonKey: "",                               // 예: "eyJhbGciOiJIUzI1NiIsInR5cCI6..."
+    url: "https://rfftsmdvvlcuesyqizbs.supabase.co",
+    anonKey: "sb_publishable_OJHJjHENxITeZVor5C9PiA_-9QMxUaC",
     table: "family_state",                     // 테이블 이름
     rowId: "main",                             // 한 가족이 쓰는 행 id
     pollMs: 5000,                              // 실시간 연결이 안 될 때 확인 주기
