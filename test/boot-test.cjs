@@ -69,7 +69,9 @@ function check(name, cond, extra) {
   console.log("\n[2] 홈");
   const active = () => $(".view.is-active").getAttribute("data-view");
   check("홈 탭 활성", active() === "home");
-  check("오늘 날짜 표시", /2026년 11월 16일/.test($("#todayLabel").textContent), $("#todayLabel").textContent);
+  const todayKst = new Date(Date.now() + 9 * 3600 * 1000);
+  const TODAY_KO = todayKst.getUTCFullYear() + "년 " + (todayKst.getUTCMonth() + 1) + "월 " + todayKst.getUTCDate() + "일";
+  check("오늘 날짜 표시", $("#todayLabel").textContent.includes(TODAY_KO), $("#todayLabel").textContent);
   check("날씨 카드 존재", !!$("#weatherCard"));
   const stats = $$(".stat-num");
   check("오늘 현황 통계 3개+", stats.length >= 3, "got " + stats.length);

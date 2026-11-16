@@ -659,6 +659,7 @@
   var unsubStore = null;
   var saveTimer = null;
   var meId = null;
+  var chatSeenIds = {};          // 이미 화면에 올라온 채팅 id (새 메시지 알림 판별용)
   var timer = { mode: "countdown", running: false, remaining: 0, elapsed: 0, itemId: null, intId: null };
   var lastStampTotal = null;
 
@@ -666,6 +667,7 @@
     return {
       version: 1,
       updatedAt: new Date().toISOString(),
+      deleted: {},                // 지운 항목 표시(tombstone) — 다른 기기가 되살리지 않게
       members: JSON.parse(JSON.stringify(CFG.defaultMembers)),
       study: {
         items: JSON.parse(JSON.stringify(DEFAULT_STUDY_ITEMS)),
@@ -742,9 +744,11 @@
     if (!s) s = freshState();
     // 알려진 필드만 유지 (이상한 데이터 방어)
     var out = freshState();
-    ["members", "study", "stamps", "badges", "dex", "mission", "todos", "chat", "quickPhrases", "calendar", "checklists", "routine", "growth", "pet", "settings"].forEach(function (k) {
+    ["members", "study", "stamps", "badges", "dex", "mission", "todos", "chat", "quickPhrases", "calendar", "checklists", "routine", "growth", "pet", "settings", "deleted"].forEach(function (k) {
       if (s[k] !== undefined) out[k] = s[k];
     });
+    if (!out.deleted || typeof out.deleted !== "object" || Array.isArray(out.deleted)) out.deleted = {};
+    if (s.updatedAt) out.updatedAt = s.updatedAt;   // 병합 기준 시간은 그대로 둔다
     rollDailyState(out);
     out.calendar.events = normalizeEvents(out.calendar.events);
     out.quickPhrases = normalizeQuickPhrases(out.quickPhrases);
@@ -753,6 +757,26 @@
     out.growth = normalizeGrowth(out.growth);
     out.pet = normalizePet(out.pet);
     return out;
+  }
+
+  // 항목을 지울 때 흔적을 남긴다 → 다른 기기가 옛 복사본을 저장해도 되살아나지 않아요
+  function markDeleted(key, ids) {
+    if (!state) return;
+    if (!state.deleted || typeof state.deleted !== "object" || Array.isArray(state.deleted)) state.deleted = {};
+    var bucket = state.deleted[key];
+    if (!bucket || typeof bucket !== "object") bucket = state.deleted[key] = {};
+    var ts = new Date().toISOString();
+    (Array.isArray(ids) ? ids : [ids]).forEach(function (id) {
+      if (id === undefined || id === null || id === "") return;
+      bucket[String(id)] = ts;
+    });
+  }
+
+  // 새로 들어온 채팅만 골라 알림을 띄우기 위해, 화면에 올라온 id 를 기억해 둔다
+  function rememberChat(list) {
+    (Array.isArray(list) ? list : []).forEach(function (m) {
+      if (m && m.id) chatSeenIds[m.id] = true;
+    });
   }
 
   function persist(immediate) {
@@ -880,6 +904,7 @@
     if (!name) return;
     confirmModal("루틴 항목 삭제", "『" + name + "』을(를) 저녁 루틴에서 지울까요? 지금까지 모은 용돈은 그대로예요.", "삭제", function () {
       state.routine.items = routineItems().filter(function (x) { return x.id !== id; });
+      markDeleted("routineItems", id);
       // 지운 항목의 체크도 오늘 기록에서 정리 (금액은 자동으로 다시 계산돼요)
       Object.keys(state.routine.days || {}).forEach(function (k) {
         if (state.routine.days[k] && state.routine.days[k].checked) delete state.routine.days[k].checked[id];
@@ -3117,6 +3142,7 @@
     if (!rec) return;
     confirmModal("기록 지우기", fmtDateKo(rec.date) + " 기록을 지울까요?", "지우기", function () {
       state.growth.records = growthRecords().filter(function (x) { return x.id !== id; });
+      markDeleted("growth", id);
       persist(true);
       renderGrowth();
       toast("기록을 지웠어요", "🗑️");
@@ -3325,6 +3351,7 @@
     var custom = d.custom.filter(function (q) { return q.id === id; })[0];
     if (custom) {
       d.custom = d.custom.filter(function (q) { return q.id !== id; });
+      markDeleted("quickCustom", id);
       persist(true);
       renderQuickPanel();
       toast("『" + custom.label + "』를 말판에서 지웠어요", "💬");
@@ -3346,6 +3373,7 @@
       "직접 더한 문구는 지워지고, 숨긴 기본 문구는 다시 나타나요. 기본 " + QUICK_MESSAGES.length + "개로 돌아가요.",
       "되돌리기",
       function () {
+        markDeleted("quickCustom", d.custom.map(function (q) { return q.id; }));
         state.quickPhrases = { custom: [], hidden: [] };
         quickEditMode = false;
         persist(true);
@@ -3898,6 +3926,7 @@
         if (!it) return;
         confirmModal("공부 삭제", "『" + it.name + "』을(를) 지울까요?", "삭제", function () {
           state.study.items = state.study.items.filter(function (x) { return x.id !== id; });
+          markDeleted("study", id);
           persist(); renderAll();
         });
         break;
@@ -4074,6 +4103,7 @@
       }
       case "delete-todo": {
         state.todos[who] = (state.todos[who] || []).filter(function (x) { return x.id !== id; });
+        markDeleted("todos", id);
         persist(); renderMission();
         break;
       }
@@ -4122,6 +4152,7 @@
         if (!evDel) return;
         confirmModal("일정 삭제", "『" + evDel.title + "』 일정을 지울까요?", "삭제", function () {
           state.calendar.events = allEvents().filter(function (x) { return x.id !== id; });
+          markDeleted("events", id);
           persist(true);
           renderAll();
           toast("일정을 지웠어요", "🗑️");
@@ -4141,6 +4172,7 @@
         if (!l1) return;
         confirmModal("리스트 삭제", "『" + l1.title + "』 리스트를 지울까요? 항목도 함께 지워져요.", "삭제", function () {
           state.checklists.lists = state.checklists.lists.filter(function (x) { return x.id !== id; });
+          markDeleted("lists", id);
           persist(true);
           renderAll();
           toast("리스트를 지웠어요", "🧺");
@@ -4162,6 +4194,7 @@
         var l3 = listById(listId);
         if (!l3) return;
         l3.items = (l3.items || []).filter(function (x) { return x.id !== id; });
+        markDeleted("listItems", id);
         persist(true);
         renderAll();
         break;
@@ -4172,6 +4205,7 @@
         var doneCount = (l4.items || []).filter(function (x) { return x.done; }).length;
         if (!doneCount) { toast("정리할 완료 항목이 없어요", "✅"); return; }
         confirmModal("완료 항목 정리", "체크한 " + doneCount + "개를 목록에서 지울까요?", "정리하기", function () {
+          markDeleted("listItems", (l4.items || []).filter(function (x) { return x.done; }).map(function (x) { return x.id; }));
           l4.items = (l4.items || []).filter(function (x) { return !x.done; });
           persist(true);
           renderAll();
@@ -4342,24 +4376,31 @@
 
   /* ---------- 시작 ---------- */
   function boot() {
-    store = Store.create(CFG);
+    // 저장소는 "덮어쓰기"가 아니라 "병합"으로 저장해요.
+    //  · getLocal: 이 기기가 지금 들고 있는 상태를 병합 때 바로 쓸 수 있게
+    //  · maxChat/maxPhotos: 병합한 채팅도 화면 상한 유지
+    store = Store.create(CFG, {
+      getLocal: function () { return state; },
+      maxChat: CFG.app.maxChatMessages,
+      maxPhotos: MAX_PHOTO_MSGS
+    });
     setInterval(tickClock, 1000);
     unsubStore = store.subscribe(function (payload, updatedAt) {
-      // 다른 기기의 변경 반영 (내가 방금 저장한 것은 무시)
+      // 다른 기기의 변경이 합쳐져 들어옴 → 이 기기 화면도 맞춘다
       if (!payload) return;
-      if (state && payload.updatedAt === state.updatedAt) return;
-      var seen = {};
-      (state && Array.isArray(state.chat) ? state.chat : []).forEach(function (m) { if (m && m.id) seen[m.id] = true; });
       var incoming = (Array.isArray(payload.chat) ? payload.chat : []).filter(function (m) {
-        return m && m.id && !seen[m.id] && m.from !== meId;
+        return m && m.id && !chatSeenIds[m.id] && m.from !== meId;
       });
       state = normalizeState(payload);
+      rememberChat(state.chat);
+      pruneChatPhotos();
       renderAll();
       if (incoming.length) noteIncoming(incoming);
     });
 
     store.load().then(function (rec) {
       state = normalizeState(rec ? rec.payload : null);
+      rememberChat(state.chat);
       // 도장 변화 추적용 초기화
       lastStampTotal = stampTotal();
 
