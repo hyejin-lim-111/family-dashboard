@@ -189,7 +189,7 @@ console.log("\n[10] 🐣 내 캐릭터 키우기 (도감 탭 교체)");
   check("홈 미니 카드", /class="home-pet"/.test(app) && /class="hg-avatar"/.test(app));
   check("키우기 탭 스타일", /\.pet-hero-card\s*\{/.test(css) && /\.pet-care-btn\s*\{/.test(css) && /\.pet-quest\s*\{/.test(css) && /\.pet-stage\s*\{/.test(css) && /\.home-pet\s*\{/.test(css));
   check("단계별 반응 애니메이션", /@keyframes petJump/.test(css) && /@keyframes petSparkle/.test(css));
-  check("태블릿 2열 배치", /#petContent\s*\{[^}]*grid-template-columns/.test(css) && /#petStageCard, #petStampCard/.test(css));
+  check("태블릿 2열 배치", /#petContent\s*\{[^}]*grid-template-columns/.test(css) && /#petHero \{ grid-column: 1; grid-row: 1/.test(css) && /#petStageCard \{ grid-column: 1 \/ -1/.test(css));
 }
 
 console.log("\n================================");

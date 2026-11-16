@@ -2293,7 +2293,7 @@ body.alarm-on { overflow: hidden; }
   background: linear-gradient(180deg, #FFF9F3, #FFF1E6);
 }
 .ps-thumb img { width: 100%; height: 100%; object-fit: cover; }
-.pet-stage.is-locked .ps-thumb img { filter: grayscale(1) brightness(1.05); opacity: 0.45; }
+.pet-stage.is-locked .ps-thumb img { filter: grayscale(1) brightness(1.05) blur(4px); opacity: 0.42; }
 .ps-lock {
   position: absolute;
   inset: 0;
@@ -2362,9 +2362,11 @@ body.alarm-on { overflow: hidden; }
     gap: 14px;
     align-items: start;
   }
-  #petHero { grid-row: 1 / span 2; margin: 0; }
-  #petCareCard, #petQuestCard { margin: 0; }
-  #petStageCard, #petStampCard { grid-column: 1 / -1; margin: 0; }
+  #petHero { grid-column: 1; grid-row: 1; margin: 0; }
+  #petCareCard { grid-column: 2; grid-row: 1; margin: 0; }
+  #petQuestCard { grid-column: 2; grid-row: 2; margin: 0; }
+  #petStampCard { grid-column: 1; grid-row: 2; margin: 0; }
+  #petStageCard { grid-column: 1 / -1; grid-row: 3; margin: 0; }
 
   .pet-scene { height: 330px; }
   .pet-name { font-size: 23px; }
