@@ -2363,9 +2363,9 @@ body.alarm-on { overflow: hidden; }
     align-items: start;
   }
   #petHero { grid-column: 1; grid-row: 1; margin: 0; }
-  #petCareCard { grid-column: 2; grid-row: 1; margin: 0; }
-  #petQuestCard { grid-column: 2; grid-row: 2; margin: 0; }
-  #petStampCard { grid-column: 1; grid-row: 2; margin: 0; }
+  #petCareCard { grid-column: 1; grid-row: 2; margin: 0; }
+  #petQuestCard { grid-column: 2; grid-row: 1; margin: 0; }
+  #petStampCard { grid-column: 2; grid-row: 2; margin: 0; }
   #petStageCard { grid-column: 1 / -1; grid-row: 3; margin: 0; }
 
   .pet-scene { height: 330px; }
