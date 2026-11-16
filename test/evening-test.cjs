@@ -285,26 +285,74 @@ function legacyPayload() {
   }
 
   /* =========================================================
-     6) 태블릿 끄기 타이머 + 알람
+     6) 홈 상단 1줄 3열 — 시간 · 용돈 · 컴팩트 타이머(누르면 확대)
      ========================================================= */
-  console.log("\n[6] 태블릿 끄기 타이머 · 알람");
+  console.log("\n[6] 홈 상단 — 시간 · 용돈 · 컴팩트 타이머");
   {
     const t = boot(legacyPayload());
     await sleep(700);
-    check("타이머 요소", !!t.$("#tabTimerFace") && !!t.$("#tabTimerToggle"));
-    check("첫 상태 0:00", t.$("#tabTimerFace").textContent === "0:00", t.$("#tabTimerFace").textContent);
-    const presets = t.$$(".tbl-preset").map((b) => b.getAttribute("data-min")).join(",");
+    const row = t.$("#homeContent .home-top");
+    check("홈 맨 윗줄 .home-top", !!row);
+    const kidNames = row ? Array.from(row.children).map((c) => c.id || "").join(",") : "";
+    check("한 줄에 시간 · 용돈 · 타이머 3개", kidNames === "homeClockCard,allowanceCard,tabletTimerCard", kidNames);
+    check("시계 카드 안에 큰 시계", !!t.$("#homeClockCard #bigClock") && !!t.$("#homeClockCard #bigClockAmpm") && !!t.$("#homeClockCard #bigClockDate"));
+    check("용돈 카드가 같은 줄", !!t.$(".home-top #allowanceCard #allowanceTotal"));
+
+    const card = t.$("#tabletTimerCard");
+    check("타이머는 컴팩트 카드", !!card);
+    check("카드 자체가 버튼(누르면 확대)", card && card.tagName === "BUTTON" && card.getAttribute("data-action") === "open-timer");
+    check("컴팩트 카드 남은 시간", t.$("#tabTimerFace").textContent === "0:00", t.$("#tabTimerFace").textContent);
+    check("카드 안에 안내 문구(눌러서 설정·크게 보기)", card.textContent.includes("눌러서 설정") && card.textContent.includes("크게 보기"));
+    check("평소엔 세부 조작 버튼이 홈에 없음", !t.$("#homeContent [data-action='tab-timer-toggle']") && !t.$("#homeContent .tbl-preset"));
+  }
+
+  /* =========================================================
+     7) 확대 타이머 — 누르면 커지고, 큰 숫자·빠른 시간·시작/일시정지/초기화
+     ========================================================= */
+  console.log("\n[7] 확대 타이머 · 알람");
+  {
+    const t = boot(legacyPayload());
+    await sleep(700);
+
+    check("처음엔 모달 닫힘", t.$("#modalRoot").hidden === true);
+    t.click(t.$("#tabletTimerCard"));
+    await sleep(150);
+    check("카드 누르면 확대 타이머 열림", t.$("#modalRoot").hidden === false);
+    check("확대 타이머 제목", t.$("#modalBox").textContent.includes("태블릿 끄기 타이머"));
+    check("큰 숫자 MM:SS", t.$("#expTimerFace").textContent === "0:00", t.$("#expTimerFace") && t.$("#expTimerFace").textContent);
+    check("닫기(✕) 버튼", !!t.$("#modalBox .modal-close"));
+
+    const presets = t.$$("#modalBox .tbl-preset").map((b) => b.getAttribute("data-min")).join(",");
     check("빠른 시간 버튼 10·20·30·60분", presets === "10,20,30,60", presets);
 
-    t.click(t.$('.tbl-preset[data-min="20"]'));
+    // ESC 로 닫기 → 다시 열기
+    t.document.dispatchEvent(new t.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    await sleep(80);
+    check("ESC로 닫힘", t.$("#modalRoot").hidden === true);
+
+    t.click(t.$("#tabletTimerCard"));
     await sleep(120);
-    check("20분 선택 → 20:00", t.$("#tabTimerFace").textContent === "20:00", t.$("#tabTimerFace").textContent);
-    check("선택된 프리셋 표시", !!t.$('.tbl-preset[data-min="20"].is-active'));
+    check("다시 열림 · 숫자 유지", t.$("#modalRoot").hidden === false && t.$("#expTimerFace").textContent === "0:00");
+
+    t.click(t.$('#modalBox .tbl-preset[data-min="20"]'));
+    await sleep(120);
+    check("20분 선택 → 확대 20:00", t.$("#expTimerFace").textContent === "20:00", t.$("#expTimerFace").textContent);
+    check("홈 컴팩트 카드도 20:00", t.$("#tabTimerFace").textContent === "20:00", t.$("#tabTimerFace").textContent);
+    check("선택된 프리셋 표시", !!t.$('#modalBox .tbl-preset[data-min="20"].is-active'));
     check("아직 시작 전이면 '시작' 버튼", t.$("#tabTimerToggle").textContent.includes("시작") && !t.$("#tabTimerToggle").textContent.includes("이어서"), t.$("#tabTimerToggle").textContent);
 
     t.click(t.$('[data-action="tab-timer-toggle"]'));
     await sleep(120);
     check("시작 → 일시정지 버튼", t.$("#tabTimerToggle").textContent.includes("일시정지"), t.$("#tabTimerToggle").textContent);
+
+    // 확대 타이머가 열린 채로 남은 시간이 실시간으로 줄어든다 (카드 안에서도 보임)
+    const realNow = t.window.Date.now;
+    t.window.Date.now = () => realNow() + 65000;
+    await sleep(450);
+    const shrunk = t.$("#expTimerFace").textContent;
+    check("확대 숫자 실시간 감소", /^18:5\d$/.test(shrunk), shrunk);
+    check("컴팩트 카드 숫자도 같이 줄어듦", t.$("#tabTimerFace").textContent === shrunk, t.$("#tabTimerFace").textContent);
+    t.window.Date.now = realNow;
 
     t.click(t.$('[data-action="tab-timer-toggle"]'));
     await sleep(120);
@@ -312,39 +360,48 @@ function legacyPayload() {
     check("일시정지 안내 문구", t.$("#tabTimerSub").textContent.includes("멈췄어요"), t.$("#tabTimerSub").textContent);
 
     t.click(t.$('[data-action="tab-timer-reset"]'));
-    await sleep(120);
-    check("초기화 → 0:00 · 시작 버튼", t.$("#tabTimerFace").textContent === "0:00" && t.$("#tabTimerToggle").textContent.includes("시작"));
+    await sleep(150);
+    check("초기화 → 확대·카드 모두 0:00 · 시작 버튼",
+      t.$("#expTimerFace").textContent === "0:00" && t.$("#tabTimerFace").textContent === "0:00" && t.$("#tabTimerToggle").textContent.includes("시작"),
+      t.$("#expTimerFace").textContent + " / " + t.$("#tabTimerToggle").textContent);
 
     // 직접 입력
     t.$("#tabTimerMin").value = "45";
     t.click(t.$('[data-action="tab-timer-custom"]'));
-    await sleep(120);
-    check("직접 입력 45분 → 45:00", t.$("#tabTimerFace").textContent === "45:00", t.$("#tabTimerFace").textContent);
+    await sleep(150);
+    check("직접 입력 45분 → 45:00", t.$("#expTimerFace").textContent === "45:00" && t.$("#tabTimerFace").textContent === "45:00", t.$("#expTimerFace").textContent);
     t.click(t.$('[data-action="tab-timer-reset"]'));
-    await sleep(120);
+    await sleep(150);
 
-    // 알람: 10분 타이머 시작 후 시간을 앞으로 돌려 00:00 도달을 만든다
+    // 알람: 확대 타이머가 열린 상태에서 00:00 도달
     check("알람 오버레이는 처음엔 숨김", t.$("#alarmOverlay").hidden === true);
-    t.click(t.$('.tbl-preset[data-min="10"]'));
+    t.click(t.$('#modalBox .tbl-preset[data-min="10"]'));
     await sleep(80);
     t.click(t.$('[data-action="tab-timer-toggle"]'));
     await sleep(80);
+    check("확대 타이머가 열린 채 도는 중", t.$("#modalRoot").hidden === false);
 
-    const realNow = t.window.Date.now;
+    const realNow2 = t.window.Date.now;
     const skew = 10 * 60 * 1000 + 2000;
-    t.window.Date.now = () => realNow() + skew;
+    t.window.Date.now = () => realNow2() + skew;
     await sleep(700);
     check("00:00 도달 → 알람 오버레이 표시", t.$("#alarmOverlay").hidden === false);
+    check("알람이 확대 타이머를 대신함", t.$("#modalRoot").hidden === true);
     const alarmTxt = t.$("#alarmOverlay").textContent;
     check("알람 문구: 시간이 다 됐어요", alarmTxt.includes("시간이 다 됐어요"), alarmTxt.slice(0, 60));
     check("알람 문구: 이제 태블릿을 꺼 주세요", alarmTxt.includes("이제 태블릿을 꺼 주세요"), alarmTxt.slice(0, 80));
     check("타이머 0:00 표시", t.$("#tabTimerFace").textContent === "0:00", t.$("#tabTimerFace").textContent);
 
-    t.window.Date.now = realNow;
+    t.window.Date.now = realNow2;
     t.click(t.$('[data-action="dismiss-alarm"]'));
-    await sleep(150);
+    await sleep(200);
     check("확인했어요 → 알람 닫힘", t.$("#alarmOverlay").hidden === true);
-    check("알람 닫으면 타이머도 0:00 초기화", t.$("#tabTimerFace").textContent === "0:00" && t.$("#tabTimerToggle").textContent.includes("시작"), t.$("#tabTimerToggle").textContent);
+    check("알람 닫으면 타이머도 0:00 초기화", t.$("#tabTimerFace").textContent === "0:00", t.$("#tabTimerFace").textContent);
+
+    // 다시 크게 보기 → 0:00 · 시작 상태
+    t.click(t.$("#tabletTimerCard"));
+    await sleep(120);
+    check("알람 뒤 다시 크게 보기", t.$("#expTimerFace").textContent === "0:00" && t.$("#tabTimerToggle").textContent.includes("시작"), t.$("#tabTimerToggle").textContent);
   }
 
   console.log("\n================================");

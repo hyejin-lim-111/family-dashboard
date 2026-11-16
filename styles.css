@@ -1244,22 +1244,48 @@ h1, h2, h3, .title-font { font-family: var(--font-title); font-weight: 700; lett
 .toast[hidden] { display: none; }
 @keyframes toastIn { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
 
-/* ---------------- 홈: 큰 시계 + 태블릿 타이머 ---------------- */
+/* ---------------- 홈 맨 윗줄: ⏰ 시간 · 💰 용돈 · ⏱️ 타이머 ---------------- */
 
-.dl-hero {
+/* 좁은 폰에서는 세로로 차례차례, 720px 이상에서는 3열 한 줄 */
+.home-grid {
   display: grid;
-  gap: 16px;
-  border-color: #FFE1C9;
-  background: linear-gradient(165deg, #FFFFFF 0%, #FFF6EC 100%);
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
 }
 
-.clock-block { text-align: center; padding: 4px 0 2px; }
+.home-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+
+.clock-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  text-align: center;
+  border-color: #FFE1C9;
+  background: linear-gradient(165deg, #FFFFFF 0%, #FFF6EC 100%);
+  container-type: inline-size;
+}
+
+.clock-head {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #B4772F;
+  letter-spacing: -0.2px;
+}
+
+.clock-main { display: flex; flex-direction: column; align-items: center; min-width: 0; max-width: 100%; }
 
 .clock-ampm {
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 700;
   color: #C2557C;
   letter-spacing: 3px;
+  margin-top: 1px;
 }
 
 .clock-time {
@@ -1267,43 +1293,115 @@ h1, h2, h3, .title-font { font-family: var(--font-title); font-weight: 700; lett
   font-weight: 800;
   font-size: 62px;
   line-height: 1.02;
-  letter-spacing: 0.5px;
+  letter-spacing: -0.5px;
   color: #211B17;
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum" 1;
+  white-space: nowrap;
 }
 
-.clock-date { margin-top: 4px; font-size: 13.5px; font-weight: 600; color: var(--ink-soft); }
+.clock-date { margin-top: 3px; font-size: 13px; font-weight: 600; color: var(--ink-soft); }
 
-.tbl-timer { border-top: 1.5px dashed var(--line-strong); padding-top: 14px; text-align: center; }
-.tbl-head { font-size: 13.5px; font-weight: 700; color: #6C51B8; letter-spacing: -0.2px; }
-.tbl-face {
+/* 컴팩트 타이머 카드 — 누르면 확대 타이머가 열린다 */
+.tbl-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 100%;
+  text-align: center;
+  color: inherit;
+  border-color: #E3D5F7;
+  background: linear-gradient(165deg, #FFFFFF 0%, #F9F4FF 100%);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.tbl-card:active { transform: scale(0.985); }
+.tbl-card.is-running {
+  border-color: #CBB6F0;
+  box-shadow: 0 12px 30px rgba(169, 139, 232, 0.24);
+}
+
+.tbl-card-head { display: inline-flex; align-items: center; gap: 6px; }
+.tbl-card-title { font-size: 12.5px; font-weight: 700; color: #6C51B8; letter-spacing: -0.2px; }
+.tbl-live { width: 7px; height: 7px; border-radius: 50%; background: #E0D6EF; flex: 0 0 auto; }
+.tbl-live.is-on { background: #5FB9B6; animation: livePulse 1.5s ease-in-out infinite; }
+@keyframes livePulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.78); }
+}
+
+.tbl-card-face {
   font-family: var(--font-num);
   font-weight: 800;
-  font-size: 46px;
+  font-size: 40px;
   line-height: 1.1;
+  letter-spacing: -0.8px;
   color: #241D19;
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum" 1;
-  margin-top: 4px;
 }
-.tbl-face.is-warn { color: var(--bad); }
-.tbl-sub { font-size: 12.5px; font-weight: 500; color: var(--ink-soft); min-height: 19px; margin-top: 2px; }
-.tbl-presets { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin-top: 10px; }
+.tbl-card-face.is-warn { color: var(--bad); }
+
+.tbl-card-sub {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  line-height: 1.35;
+  max-width: 100%;
+}
+
+.tbl-card-cta {
+  margin-top: 5px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #7B5BB8;
+  background: #F2EBFF;
+  border-radius: 999px;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+
+/* 빠른 시간 버튼 — 확대 타이머 안에서 쓴다 */
 .tbl-preset {
   border: 1.5px solid #E7DCF7; background: #fff; color: #6C51B8;
-  border-radius: 999px; padding: 7px 15px; font-size: 13.5px; font-weight: 600;
+  border-radius: 999px; padding: 8px 16px; font-size: 13.5px; font-weight: 600;
   font-family: var(--font-num);
 }
 .tbl-preset.is-active { background: #EFE6FF; border-color: #CBB6F0; color: #55399C; }
-.tbl-custom { display: flex; gap: 6px; justify-content: center; margin-top: 8px; }
-.tbl-custom input {
-  width: 118px; text-align: center;
-  border: 1.5px solid var(--line-strong); border-radius: 12px;
-  padding: 8px 10px; background: #fff; font-size: 14px;
+
+/* 확대 타이머 (모달) */
+.modal.center.timer-expand { max-width: 540px; }
+.te-wrap { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 2px 0 2px; }
+.te-face-box { width: 100%; text-align: center; padding: 2px 0 0; }
+.te-face {
+  font-family: var(--font-num);
+  font-weight: 800;
+  font-size: clamp(62px, 17vw, 112px);
+  line-height: 1.02;
+  letter-spacing: -2px;
+  color: #241D19;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
 }
-.tbl-btns { display: flex; gap: 8px; justify-content: center; margin-top: 10px; }
-.tbl-btns .btn { min-width: 108px; }
+.te-face.is-warn { color: var(--bad); animation: teBeat 1.05s ease-in-out infinite; }
+@keyframes teBeat {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+.te-sub { min-height: 20px; margin-top: 2px; font-size: 14px; font-weight: 700; color: var(--ink-soft); }
+.te-presets { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.te-presets .tbl-preset { padding: 10px 18px; font-size: 15px; }
+.te-custom { display: flex; justify-content: center; gap: 8px; width: 100%; }
+.te-custom input {
+  width: 150px; text-align: center;
+  border: 1.5px solid var(--line-strong); border-radius: 14px;
+  padding: 10px 12px; background: #fff; font-size: 15px;
+}
+.te-btns { display: flex; gap: 8px; width: 100%; }
+.te-toggle { flex: 1 1 auto; min-height: 58px; font-size: 17px; font-weight: 700; }
+.te-reset { flex: 0 0 auto; min-height: 58px; }
+.te-hint { font-size: 11.5px; color: var(--ink-faint); text-align: center; }
 
 /* ---------------- 홈: 모은 용돈 ---------------- */
 
@@ -1429,6 +1527,35 @@ body.alarm-on { overflow: hidden; }
   }
   .home-grid .span-2 { grid-column: 1 / -1; }
 
+  /* 맨 윗줄 3열 한 줄 — ⏰ 시간 | 💰 용돈 현황 | ⏱️ 타이머 */
+  .home-top {
+    grid-template-columns: minmax(0, 1.04fr) minmax(0, 1fr) minmax(0, 0.96fr);
+    gap: 14px;
+    align-items: stretch;
+  }
+  .home-top > .card { height: 100%; margin: 0; }
+
+  .clock-card { padding: 16px 10px; }
+  .clock-head { font-size: 12px; }
+  .clock-time { font-size: clamp(30px, 4.6vw, 58px); letter-spacing: -1px; }
+  @supports (container-type: inline-size) {
+    /* 카드 폭에 맞춰 숫자 크기를 잡아 3열 안에서도 꽉 차고 넘치지 않게 */
+    .clock-time { font-size: min(62px, 24cqw); }
+  }
+  .clock-date { font-size: 12.5px; }
+
+  .allowance-card { padding: 16px 14px; }
+  .allowance-ico { font-size: 30px; }
+  .allowance-label { font-size: 11.5px; }
+  .allowance-total { font-size: 30px; }
+  .allowance-today { font-size: 11.5px; }
+  .allowance-hint { font-size: 10.5px; line-height: 1.4; }
+
+  .tbl-card { padding: 16px 12px; }
+  .tbl-card-face { font-size: 34px; }
+  .tbl-card-title { font-size: 12px; }
+  .tbl-card-sub { font-size: 11px; }
+
   .dex-grid { grid-template-columns: repeat(4, 1fr); }
   .todo-people { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; align-items: start; }
 
@@ -1451,15 +1578,6 @@ body.alarm-on { overflow: hidden; }
 
   .timer-time { font-size: 66px; }
   .chat-card { height: min(72vh, 700px); }
-
-  .dl-hero { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 6px; }
-  .dl-hero .tbl-timer {
-    border-top: 0; padding-top: 0;
-    border-left: 1.5px dashed var(--line-strong); padding-left: 16px;
-  }
-  .clock-time { font-size: 74px; }
-  .clock-date { font-size: 14px; }
-  .allowance-total { font-size: 38px; }
 }
 
 @media (min-width: 1024px) {
@@ -1486,10 +1604,11 @@ body.alarm-on { overflow: hidden; }
   .event-row { padding: 8px; gap: 7px; }
   .seg-btn { font-size: 12px; padding: 8px 4px; }
   .clock-time { font-size: 46px; }
-  .tbl-face { font-size: 38px; }
+  .tbl-card-face { font-size: 34px; }
   .allowance-total { font-size: 29px; }
   .alarm-title { font-size: 23px; }
   .alarm-msg { font-size: 17px; }
+  .te-face { font-size: clamp(56px, 19vw, 90px); }
 }
 
 @media (prefers-reduced-motion: reduce) {

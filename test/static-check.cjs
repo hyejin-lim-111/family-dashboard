@@ -108,6 +108,24 @@ console.log("\n[6] 화면 골격");
   check("config.js 키 보존", /sb_publishable_OJHJjHENxITeZVor5C9PiA_-9QMxUaC/.test(read("config.js")));
 }
 
+console.log("\n[7] 홈 상단 1줄 3열 · 확대 타이머");
+{
+  // 태블릿(720px~)에서 맨 윗줄이 3열 한 줄
+  const wide = css.slice(css.indexOf("@media (min-width: 720px)"));
+  const topRule = (wide.match(/\.home-top\s*\{[^}]*\}/) || [""])[0];
+  check(".home-top 3열 그리드", /grid-template-columns:\s*(repeat\(3|minmax\([^;]*minmax\([^;]*minmax\()/.test(topRule), topRule.replace(/\s+/g, " "));
+  check("좁은 폰에서 세로로 접힘", /\.home-grid\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/.test(css));
+  check("컴팩트 타이머 카드 스타일", /\.tbl-card\s*\{/.test(css) && /\.tbl-card-face\s*\{/.test(css));
+  check("확대 타이머 스타일", /\.te-face\s*\{/.test(css) && /\.te-presets\s*\.tbl-preset\s*\{/.test(css));
+  check("접힌 옛 히어로 스타일 정리", !/\.dl-hero\s*\{/.test(css) && !/\.tbl-timer\s*\{/.test(css));
+
+  check("홈 맨 윗줄에 시간·용돈·타이머 묶음", /function buildHomeTopRow\(\)/.test(app) &&
+    /buildClockCard\(\)\s*\+\s*buildAllowanceCard\(\)\s*\+\s*buildTimerCard\(\)/.test(app.replace(/row\.innerHTML\s*=\s*/, "")));
+  check("컴팩트 카드가 열기 동작을 가짐", /id="tabletTimerCard"/.test(app) && /data-action="open-timer"/.test(app));
+  check("확대 타이머 열기/큰 숫자", /function openTimerExpand\(\)/.test(app) && /id="expTimerFace"/.test(app));
+  check("알람이 확대 타이머를 대신함", /function onTabletFinish\(\)[\s\S]{0,400}closeModal\(\)/.test(app));
+}
+
 console.log("\n================================");
 if (failures) { console.log("FAILED: " + failures + " checks"); process.exit(1); }
 console.log("ALL STATIC CHECKS PASSED ✅");

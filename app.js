@@ -756,7 +756,7 @@
     opts = opts || {};
     var root = qs("#modalRoot");
     var box = qs("#modalBox");
-    box.className = "modal" + (opts.center ? " center" : "");
+    box.className = "modal" + (opts.center ? " center" : "") + (opts.cls ? " " + opts.cls : "");
     if (opts.title != null) {
       box.innerHTML =
         '<div class="modal-head"><h2 class="modal-title" id="modalTitle">' + esc(opts.title) + '</h2>' +
@@ -1026,12 +1026,31 @@
   }
 
   function paintTabletTimer() {
+    var label = mmss(tabletTimer.remaining);
+    var warn = tabletTimer.running && tabletTimer.remaining <= 10;
+
+    // 홈의 컴팩트 카드
     var face = qs("#tabTimerFace");
     if (face) {
-      face.textContent = mmss(tabletTimer.remaining);
-      face.classList.toggle("is-warn", tabletTimer.running && tabletTimer.remaining <= 10);
+      face.textContent = label;
+      face.classList.toggle("is-warn", warn);
     }
     setTextById("tabTimerSub", tabletTimerSubText());
+    var card = qs("#tabletTimerCard");
+    if (card) {
+      card.classList.toggle("is-running", tabletTimer.running);
+      var live = qs(".tbl-live", card);
+      if (live) live.classList.toggle("is-on", tabletTimer.running);
+    }
+
+    // 크게 보기(확대 타이머)가 열려 있으면 그 숫자도 같이
+    var expFace = qs("#expTimerFace");
+    if (expFace) {
+      expFace.textContent = label;
+      expFace.classList.toggle("is-warn", warn);
+    }
+    setTextById("expTimerSub", tabletTimerSubText());
+
     var toggle = qs("#tabTimerToggle");
     if (toggle) toggle.textContent = tabletToggleLabel();
     qsa(".tbl-preset").forEach(function (b) {
@@ -1107,6 +1126,8 @@
     tabletTimer.remaining = 0;
     tabletTimer.ringing = true;
     paintTabletTimer();
+    // 확대 타이머(또는 다른 모달)가 열려 있으면 알람이 가려지지 않게 닫고 띄운다
+    if (!qs("#modalRoot").hidden) closeModal();
     tableTimerShowAlarm();
     playAlarmChime(3);
     try { if (navigator.vibrate) navigator.vibrate([200, 120, 200, 120, 400]); } catch (e) { /* 무시 */ }
@@ -1136,47 +1157,21 @@
     renderHome();
   }
 
-  function buildHomeHero() {
-    var box = el("div", "span-2");
-    box.innerHTML =
-      '<div class="card dl-hero" id="homeHero">' +
-        '<div class="clock-block">' +
+  function buildClockCard() {
+    return '<div class="card clock-card" id="homeClockCard">' +
+        '<div class="clock-head"><span aria-hidden="true">⏰</span> 시간</div>' +
+        '<div class="clock-main">' +
           '<div class="clock-ampm" id="bigClockAmpm">오전</div>' +
           '<div class="clock-time" id="bigClock">--:--:--</div>' +
-          '<div class="clock-date" id="bigClockDate"></div>' +
         '</div>' +
-        '<div class="tbl-timer" id="tabletTimer">' +
-          '<div class="tbl-head">⏰ 태블릿 끄기 타이머</div>' +
-          '<div class="tbl-face' + (tabletTimer.running && tabletTimer.remaining <= 10 ? " is-warn" : "") + '" id="tabTimerFace">' +
-            mmss(tabletTimer.remaining) + '</div>' +
-          '<div class="tbl-sub" id="tabTimerSub">' + esc(tabletTimerSubText()) + '</div>' +
-          '<div class="tbl-presets">' +
-            TABLET_PRESETS.map(function (m) {
-              return '<button class="tbl-preset' +
-                (!tabletTimer.running && tabletTimer.remaining === m * 60 ? " is-active" : "") +
-                '" type="button" data-action="tab-timer-preset" data-min="' + m + '">' + m + '분</button>';
-            }).join("") +
-          '</div>' +
-          '<div class="tbl-custom">' +
-            '<input type="number" id="tabTimerMin" min="1" max="180" placeholder="직접 입력(분)" aria-label="직접 입력(분)">' +
-            '<button class="btn btn-xs btn-ghost" type="button" data-action="tab-timer-custom">설정</button>' +
-          '</div>' +
-          '<div class="tbl-btns">' +
-            '<button class="btn btn-purple" type="button" data-action="tab-timer-toggle" id="tabTimerToggle">' +
-              tabletToggleLabel() + '</button>' +
-            '<button class="btn btn-ghost" type="button" data-action="tab-timer-reset">↺ 초기화</button>' +
-          '</div>' +
-        '</div>' +
+        '<div class="clock-date" id="bigClockDate"></div>' +
       '</div>';
-    return box;
   }
 
   function buildAllowanceCard() {
     var st = routineStats(todayKey());
     var pct = st.total ? Math.round(st.done / st.total * 100) : 0;
-    var box = el("div", "span-2");
-    box.innerHTML =
-      '<div class="card allowance-card" id="allowanceCard">' +
+    return '<div class="card allowance-card" id="allowanceCard">' +
         '<button class="allowance-main" type="button" data-action="open-routine" aria-label="미션 탭의 다인이 저녁 루틴으로 가기">' +
           '<span class="allowance-ico" aria-hidden="true">💰</span>' +
           '<span class="allowance-body">' +
@@ -1191,7 +1186,59 @@
         '<div class="progress" style="margin-top:12px"><i style="width:' + pct + '%"></i></div>' +
         '<p class="allowance-hint">항목당 +' + fmtWon(ROUTINE_PER_ITEM) + ' · 모두 완료 시 보너스 +' + fmtWon(ROUTINE_ALL_BONUS) + '!</p>' +
       '</div>';
-    return box;
+  }
+
+  // 가운데 카드: 평소엔 한 줄 높이의 컴팩트 타이머 — 누르면 확대 타이머가 열린다
+  function buildTimerCard() {
+    var warn = tabletTimer.running && tabletTimer.remaining <= 10;
+    return '<button class="card tbl-card' + (tabletTimer.running ? ' is-running' : '') + '" type="button"' +
+        ' id="tabletTimerCard" data-action="open-timer" aria-label="태블릿 끄기 타이머 — 눌러서 크게 보기">' +
+        '<span class="tbl-card-head">' +
+          '<span class="tbl-card-title">⏱️ 태블릿 끄기</span>' +
+          '<span class="tbl-live' + (tabletTimer.running ? ' is-on' : '') + '" aria-hidden="true"></span>' +
+        '</span>' +
+        '<span class="tbl-card-face' + (warn ? ' is-warn' : '') + '" id="tabTimerFace">' + mmss(tabletTimer.remaining) + '</span>' +
+        '<span class="tbl-card-sub" id="tabTimerSub">' + esc(tabletTimerSubText()) + '</span>' +
+        '<span class="tbl-card-cta">눌러서 설정 · 크게 보기 ⤢</span>' +
+      '</button>';
+  }
+
+  // 확대 타이머 — 큰 숫자 · 빠른 시간 · 직접 입력 · 시작/일시정지/초기화
+  function timerExpandHtml() {
+    var warn = tabletTimer.running && tabletTimer.remaining <= 10;
+    return '<div class="te-wrap">' +
+        '<div class="te-face-box">' +
+          '<div class="te-face' + (warn ? ' is-warn' : '') + '" id="expTimerFace">' + mmss(tabletTimer.remaining) + '</div>' +
+          '<div class="te-sub" id="expTimerSub">' + esc(tabletTimerSubText()) + '</div>' +
+        '</div>' +
+        '<div class="te-presets">' +
+          TABLET_PRESETS.map(function (m) {
+            return '<button class="tbl-preset' +
+              (!tabletTimer.running && tabletTimer.remaining === m * 60 ? " is-active" : "") +
+              '" type="button" data-action="tab-timer-preset" data-min="' + m + '">' + m + '분</button>';
+          }).join("") +
+        '</div>' +
+        '<div class="te-custom">' +
+          '<input type="number" id="tabTimerMin" min="1" max="180" placeholder="직접 입력(분)" aria-label="직접 입력(분)">' +
+          '<button class="btn btn-soft" type="button" data-action="tab-timer-custom">설정</button>' +
+        '</div>' +
+        '<div class="te-btns">' +
+          '<button class="btn btn-purple te-toggle" type="button" data-action="tab-timer-toggle" id="tabTimerToggle">' +
+            tabletToggleLabel() + '</button>' +
+          '<button class="btn btn-ghost te-reset" type="button" data-action="tab-timer-reset">↺ 초기화</button>' +
+        '</div>' +
+        '<p class="te-hint">00:00이 되면 화면 가득 알람이 울려요</p>' +
+      '</div>';
+  }
+
+  function openTimerExpand() {
+    openModal(timerExpandHtml(), { title: "⏱️ 태블릿 끄기 타이머", center: true, cls: "timer-expand" });
+  }
+
+  function buildHomeTopRow() {
+    var row = el("div", "span-2 home-top");
+    row.innerHTML = buildClockCard() + buildAllowanceCard() + buildTimerCard();
+    return row;
   }
 
   function renderHome() {
@@ -1218,9 +1265,8 @@
 
     var grid = qs(".home-grid", home);
 
-    // 맨 위: 큰 시계 + 태블릿 끄기 타이머, 그 아래 모은 용돈
-    grid.appendChild(buildHomeHero());
-    grid.appendChild(buildAllowanceCard());
+    // 맨 윗줄: ⏰ 시간 · 💰 용돈 현황 · ⏱️ 타이머 — 태블릿 넓은 화면에서는 3열 한 줄
+    grid.appendChild(buildHomeTopRow());
 
     // 날씨 카드
     var wWrap = el("div");
@@ -2616,6 +2662,7 @@
       }
 
       /* 홈 — 태블릿 끄기 타이머 */
+      case "open-timer": openTimerExpand(); break;
       case "tab-timer-preset": setTabletPreset(btn.getAttribute("data-min")); break;
       case "tab-timer-custom": {
         var tmin = Number(qs("#tabTimerMin") && qs("#tabTimerMin").value);
