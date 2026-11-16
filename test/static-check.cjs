@@ -133,6 +133,7 @@ console.log("\n[8] 홈 4단 배치 (태블릿 2열 · 미니 달력)");
   check("넓은 화면 2열 그리드", /grid-template-columns:\s*1[^;]*fr\s+[^;]*fr/.test(gridRule), gridRule.replace(/\s+/g, " "));
   check("한 줄 안 카드 높이 맞춤", /\.home-grid > \.home-cell\s*\{[^}]*display:\s*grid/.test(wide));
   check("좌우 카드가 같은 높이", /\.home-grid\s*\{[^}]*align-items:\s*stretch/.test(wide));
+  check("날씨 카드는 내용 높이만큼", /\.home-grid > \.home-cell-weather\s*\{[^}]*align-self:\s*start/.test(wide));
   check("미니 달력 7열", /\.hcal-grid\s*\{[^}]*repeat\(7/.test(css));
   check("미니 달력 오늘 강조", /\.hcal-cell\.is-today\s*\{/.test(css));
   check("미니 달력 일정 점", /\.hcal-dot\s*\{/.test(css) && /\.hcal-dot\.who-dain\s*\{/.test(css) && /\.hcal-dot\.who-all\s*\{/.test(css));

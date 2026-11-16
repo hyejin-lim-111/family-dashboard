@@ -1577,8 +1577,9 @@ body.alarm-on { overflow: hidden; }
   /* 한 줄 안의 카드 높이를 맞춘다 (안쪽 카드가 칸을 꽉 채움) */
   .home-grid > .home-cell { display: grid; min-width: 0; }
   .home-grid > .home-cell > .card { height: 100%; margin: 0; }
-  .home-cell-weather > .weather { display: flex; flex-direction: column; }
-  .home-cell-weather .weather-foot { margin-top: auto; }
+  /* 날씨 카드는 내용만큼만 높이를 쓰고 위에 붙인다 (달력 카드가 더 길어도 빈 칸을 남기지 않게) */
+  .home-grid > .home-cell-weather { align-self: start; }
+  .home-grid > .home-cell-weather > .card { height: auto; }
 
   .hcal-cell { min-height: 38px; }
   .hcal-num { font-size: 13.5px; }
