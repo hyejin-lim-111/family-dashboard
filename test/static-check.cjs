@@ -89,7 +89,8 @@ console.log("\n[5] 로컬 자산 경로");
     let m;
     const re = /(?:src|href)="(assets\/[^"]+)"/g;
     while ((m = re.exec(text))) files.add(m[1]);
-    const re2 = /["'](assets\/[a-z_]+\.png)["']/g;
+    // 캐시 무효화 쿼리(?v=...)가 붙은 경로도 파일 존재를 확인한다
+    const re2 = /["'](assets\/[a-z_]+\.png)(?:\?[^"']*)?["']/g;
     while ((m = re2.exec(text))) files.add(m[1]);
   };
   addAll(html);
