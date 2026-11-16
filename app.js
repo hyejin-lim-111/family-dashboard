@@ -196,6 +196,19 @@
     { emoji: "🎒", title: "외출 준비물" }
   ];
 
+  /* ---------- 다인이 저녁 루틴 · 용돈 ---------- */
+  var ROUTINE_PER_ITEM = 100;      // 항목 하나 완료할 때마다 100원
+  var ROUTINE_ALL_BONUS = 500;     // 그날 항목을 모두 완료하면 보너스 500원
+  var DEFAULT_ROUTINE_ITEMS = [
+    { id: "r-bath",     name: "목욕하기" },
+    { id: "r-homework", name: "숙제하기" },
+    { id: "r-meal",     name: "밥먹기" },
+    { id: "r-brush",    name: "양치하기" }
+  ];
+
+  /* ---------- 홈 태블릿 타이머 ---------- */
+  var TABLET_PRESETS = [10, 20, 30, 60];
+
   /* ---------- 작은 도구 ---------- */
   function qs(sel, root) { return (root || document).querySelector(sel); }
   function qsa(sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); }
@@ -233,7 +246,6 @@
   }
 
   function pad2(n) { return (n < 10 ? "0" : "") + n; }
-
   /* ---------- 달력 날짜 도구 ---------- */
   function keyOfParts(y, m, d) { return y + "-" + pad2(m + 1) + "-" + pad2(d); }
 
@@ -333,6 +345,42 @@
     });
   }
 
+  function fmtWon(n) {
+    var v = Math.round(Number(n) || 0);
+    var sign = v < 0 ? "-" : "";
+    var s = String(Math.abs(v)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    return sign + s + "원";
+  }
+
+  // 저녁 루틴 기록(항목 목록 + 날짜별 체크)을 안전하게 다듬는다
+  function normalizeRoutine(raw) {
+    var out = { items: [], days: {}, spent: 0 };
+    var src = (raw && typeof raw === "object") ? raw : null;
+    if (!src || !Array.isArray(src.items)) {
+      // 항목 정보가 아예 없던 기록 → 샘플 4개로 시작
+      out.items = JSON.parse(JSON.stringify(DEFAULT_ROUTINE_ITEMS));
+    } else {
+      out.items = src.items.filter(function (it) {
+        return it && it.id && String(it.name || "").trim();
+      }).map(function (it) {
+        return { id: String(it.id), name: String(it.name).trim().slice(0, 30) };
+      });
+    }
+    var days = (src && src.days && typeof src.days === "object") ? src.days : {};
+    Object.keys(days).forEach(function (k) {
+      if (!isDateKey(k)) return;
+      var rec = days[k] || {};
+      var srcChecked = (rec.checked && typeof rec.checked === "object") ? rec.checked : {};
+      var checked = {};
+      Object.keys(srcChecked).forEach(function (id) {
+        if (srcChecked[id]) checked[String(id)] = true;
+      });
+      out.days[k] = { checked: checked };
+    });
+    out.spent = Math.max(0, Math.round(Number(src && src.spent) || 0));
+    return out;
+  }
+
   function mmss(totalSec) {
     var s = Math.max(0, Math.floor(totalSec));
     var m = Math.floor(s / 60);
@@ -398,6 +446,11 @@
       chat: [],
       calendar: { events: [] },          // 가족 공유 달력 일정
       checklists: { lists: defaultLists() }, // 가족 공유 체크리스트
+      routine: {                          // 다인이 저녁 루틴 + 용돈
+        items: JSON.parse(JSON.stringify(DEFAULT_ROUTINE_ITEMS)),
+        days: {},                         // "YYYY-MM-DD": { checked: { itemId: true } }
+        spent: 0                          // 부모님이 쓴(차감한) 용돈
+      },
       settings: { weatherCache: null }
     };
   }
@@ -430,6 +483,7 @@
       changed = true;
     }
     if (!s.chat) { s.chat = []; changed = true; }
+    if (!s.routine || typeof s.routine !== "object") { s.routine = normalizeRoutine(null); changed = true; }
     if (!s.members || !s.members.length) { s.members = JSON.parse(JSON.stringify(CFG.defaultMembers)); changed = true; }
     return changed;
   }
@@ -439,12 +493,13 @@
     if (!s) s = freshState();
     // 알려진 필드만 유지 (이상한 데이터 방어)
     var out = freshState();
-    ["members", "study", "stamps", "badges", "dex", "mission", "todos", "chat", "calendar", "checklists", "settings"].forEach(function (k) {
+    ["members", "study", "stamps", "badges", "dex", "mission", "todos", "chat", "calendar", "checklists", "routine", "settings"].forEach(function (k) {
       if (s[k] !== undefined) out[k] = s[k];
     });
     rollDailyState(out);
     out.calendar.events = normalizeEvents(out.calendar.events);
     out.checklists.lists = normalizeLists(out.checklists.lists);
+    out.routine = normalizeRoutine(out.routine);
     return out;
   }
 
@@ -478,6 +533,144 @@
   }
 
   function avatarOf(m) { return m ? (m.photo || m.avatar || "") : ""; }
+
+  /* ---------- 저녁 루틴 · 용돈 100원 / 보너스 500원 ---------- */
+  function routineItems() { return (state.routine && state.routine.items) || []; }
+
+  function routineDay(dateKey) {
+    if (!state.routine) state.routine = normalizeRoutine(null);
+    if (!state.routine.days) state.routine.days = {};
+    var key = dateKey || todayKey();
+    if (!state.routine.days[key] || typeof state.routine.days[key] !== "object") {
+      state.routine.days[key] = { checked: {} };
+    }
+    if (!state.routine.days[key].checked || typeof state.routine.days[key].checked !== "object") {
+      state.routine.days[key].checked = {};
+    }
+    return state.routine.days[key];
+  }
+
+  // 어떤 날짜든 [그 날 체크한 항목] × 100원 + (그날 항목을 모두 완료했으면) 500원
+  // → 체크를 풀면 그 항목 금액과 보너스가 함께 사라지고, 다시 다 하면 다시 붙는다. 하루 최대 보너스 1회.
+  function routineStats(dateKey) {
+    var items = routineItems();
+    var checked = routineDay(dateKey).checked;
+    var done = 0;
+    items.forEach(function (it) { if (checked[it.id]) done += 1; });
+    var allDone = items.length > 0 && done === items.length;
+    return {
+      done: done,
+      total: items.length,
+      allDone: allDone,
+      earned: done * ROUTINE_PER_ITEM + (allDone ? ROUTINE_ALL_BONUS : 0)
+    };
+  }
+
+  function routineEarned() {
+    var days = (state.routine && state.routine.days) || {};
+    var sum = 0;
+    Object.keys(days).forEach(function (k) {
+      if (!isDateKey(k)) return;
+      sum += routineStats(k).earned;
+    });
+    return sum;
+  }
+
+  function routineSpent() {
+    return Math.max(0, Math.round(Number(state.routine && state.routine.spent) || 0));
+  }
+
+  function routineTotal() {
+    return Math.max(0, routineEarned() - routineSpent());
+  }
+
+  function routineByName(id) {
+    var it = routineItems().find(function (x) { return x.id === id; });
+    return it ? it.name : "";
+  }
+
+  function toggleRoutineItem(id) {
+    if (!routineByName(id)) return;
+    var rec = routineDay(todayKey());
+    if (rec.checked[id]) delete rec.checked[id];
+    else rec.checked[id] = true;
+    var st = routineStats(todayKey());
+    persist(true);
+    renderAll();
+    if (rec.checked[id] && st.allDone) {
+      toast("저녁 루틴 모두 완료! +" + fmtWon(st.earned) + " (보너스 " + fmtWon(ROUTINE_ALL_BONUS) + " 포함)", "🎉");
+    } else if (rec.checked[id]) {
+      toast("『" + routineByName(id) + "』 +" + fmtWon(ROUTINE_PER_ITEM), "💰");
+    } else if (st.allDone) {
+      toast("체크를 풀었어요 — 오늘 " + fmtWon(st.earned), "↩️");
+    } else {
+      toast("체크를 풀었어요 — 오늘 " + fmtWon(st.earned), "↩️");
+    }
+  }
+
+  function addRoutineItem(name) {
+    var t = String(name || "").trim();
+    if (!t) { toast("루틴 항목을 적어 주세요", "🌙"); return false; }
+    var items = routineItems();
+    if (items.some(function (x) { return x.name === t; })) { toast("이미 있는 항목이에요", "🌙"); return false; }
+    if (items.length >= 12) { toast("항목은 12개까지 넣을 수 있어요", "🌙"); return false; }
+    state.routine.items.push({ id: uid("r"), name: t.slice(0, 30) });
+    persist(true);
+    renderAll();
+    toast("『" + t.slice(0, 30) + "』 추가했어요", "🌙");
+    return true;
+  }
+
+  function deleteRoutineItem(id) {
+    var name = routineByName(id);
+    if (!name) return;
+    confirmModal("루틴 항목 삭제", "『" + name + "』을(를) 저녁 루틴에서 지울까요? 지금까지 모은 용돈은 그대로예요.", "삭제", function () {
+      state.routine.items = routineItems().filter(function (x) { return x.id !== id; });
+      // 지운 항목의 체크도 오늘 기록에서 정리 (금액은 자동으로 다시 계산돼요)
+      Object.keys(state.routine.days || {}).forEach(function (k) {
+        if (state.routine.days[k] && state.routine.days[k].checked) delete state.routine.days[k].checked[id];
+      });
+      persist(true);
+      renderAll();
+      toast("『" + name + "』을(를) 지웠어요", "🌙");
+    });
+  }
+
+  function openSpendAllowance() {
+    var total = routineTotal();
+    openModal(
+      '<p class="muted" style="font-size:12.5px">지금까지 모은 용돈 <b style="color:#C2557C">' + fmtWon(routineTotal()) + '</b>' +
+        (routineSpent() ? ' · 지금까지 쓴 용돈 ' + fmtWon(routineSpent()) : '') + '</p>' +
+      '<div class="field"><label for="spendAmount">쓴(뺄) 금액</label>' +
+        '<input type="number" id="spendAmount" min="100" step="100" max="' + Math.max(100, total) + '" placeholder="예: 1000"></div>' +
+      '<div class="modal-actions">' +
+        '<button class="btn btn-ghost" type="button" data-action="close-modal">취소</button>' +
+        '<button class="btn btn-primary" type="button" id="spendOkBtn">차감하기</button>' +
+      '</div>',
+      { title: "다인이 용돈 쓰기" }
+    );
+    qs("#spendOkBtn").addEventListener("click", function () {
+      var v = Math.round(Number(qs("#spendAmount").value) || 0);
+      if (v <= 0) { toast("금액을 넣어 주세요", "💰"); return; }
+      var left = routineTotal();
+      if (v > left) { toast("모은 용돈(" + fmtWon(left) + ")보다 많아요", "💰"); return; }
+      state.routine.spent = routineSpent() + v;
+      closeModal();
+      persist(true);
+      renderAll();
+      toast(fmtWon(v) + " 썼어요 — 남은 용돈 " + fmtWon(routineTotal()), "💰");
+    });
+  }
+
+  function resetAllowance() {
+    confirmModal("용돈 기록 초기화", "모은 용돈과 날짜별 루틴 기록을 모두 지우고 0원부터 다시 시작해요. 루틴 항목 목록은 그대로 둘게요. 계속할까요?", "초기화", function () {
+      state.routine.days = {};
+      state.routine.spent = 0;
+      persist(true);
+      renderAll();
+      toast("용돈을 0원부터 다시 모아요", "🌱");
+    });
+  }
 
   /* ---------- 도장 / 배지 / 도감 ---------- */
   function stampTotal() {
@@ -763,6 +956,236 @@
     });
   }
 
+  /* =========================================================
+     홈 — 큰 시계 + 태블릿 끄기 타이머
+     ========================================================= */
+  var tabletTimer = { total: 0, remaining: 0, running: false, endAt: 0, intId: null, ringing: false, presetMin: 0 };
+  var audioCtx = null;
+
+  function setTextById(id, text) {
+    var node = qs("#" + id);
+    if (node && node.textContent !== text) node.textContent = text;
+  }
+
+  function tickClock() {
+    var now = new Date();
+    var h = now.getHours();
+    var hh = h % 12; if (hh === 0) hh = 12;
+    var key = todayKey(now);
+    setTextById("bigClockAmpm", h < 12 ? "오전" : "오후");
+    setTextById("bigClock", pad2(hh) + ":" + pad2(now.getMinutes()) + ":" + pad2(now.getSeconds()));
+    setTextById("bigClockDate", fmtDateKo(key) + " " + DOW_KO[dowOfKey(key)] + "요일");
+  }
+
+  function ensureAudio() {
+    try {
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return null;
+      if (!audioCtx) audioCtx = new Ctx();
+      if (audioCtx.state === "suspended" && audioCtx.resume) audioCtx.resume();
+      return audioCtx;
+    } catch (e) { return null; }
+  }
+
+  // 부드러운 알람음 세 번 (무음이 불가능해도 화면으로 알림)
+  function playAlarmChime(times) {
+    var ctx = ensureAudio();
+    if (!ctx) return;
+    try {
+      var base = ctx.currentTime;
+      var rounds = times || 3;
+      for (var r = 0; r < rounds; r++) {
+        [880, 1174.66].forEach(function (f, i) {
+          var o = ctx.createOscillator();
+          var g = ctx.createGain();
+          o.type = "sine";
+          o.frequency.value = f;
+          o.connect(g); g.connect(ctx.destination);
+          var t0 = base + r * 1.05 + i * 0.24;
+          g.gain.setValueAtTime(0.0001, t0);
+          g.gain.exponentialRampToValueAtTime(0.20, t0 + 0.03);
+          g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.60);
+          o.start(t0); o.stop(t0 + 0.65);
+        });
+      }
+    } catch (e) { /* 소리는 선택 */ }
+  }
+
+  function tabletTimerSubText() {
+    if (tabletTimer.ringing) return "알람이 울리는 중이에요";
+    if (tabletTimer.running) return "태블릿을 끌 준비를 해요…";
+    if (tabletTimer.remaining > 0) return "준비됐어요 — 시작을 눌러요";
+    return "10 · 20 · 30 · 60분 또는 직접 입력";
+  }
+
+  function paintTabletTimer() {
+    var face = qs("#tabTimerFace");
+    if (face) {
+      face.textContent = mmss(tabletTimer.remaining);
+      face.classList.toggle("is-warn", tabletTimer.running && tabletTimer.remaining <= 10);
+    }
+    setTextById("tabTimerSub", tabletTimerSubText());
+    var toggle = qs("#tabTimerToggle");
+    if (toggle) {
+      toggle.textContent = tabletTimer.running ? "⏸ 일시정지"
+        : (tabletTimer.remaining > 0 ? "▶ 이어서" : "▶ 시작");
+    }
+    qsa(".tbl-preset").forEach(function (b) {
+      var on = !tabletTimer.running && tabletTimer.remaining > 0 &&
+        Number(b.getAttribute("data-min")) * 60 === tabletTimer.remaining;
+      b.classList.toggle("is-active", on);
+    });
+  }
+
+  function stopTabletInt() {
+    if (tabletTimer.intId) { clearInterval(tabletTimer.intId); tabletTimer.intId = null; }
+  }
+
+  function startTabletInt() {
+    stopTabletInt();
+    tabletTimer.intId = setInterval(function () {
+      var left = Math.max(0, Math.round((tabletTimer.endAt - Date.now()) / 1000));
+      tabletTimer.remaining = left;
+      if (left <= 0) {
+        stopTabletInt();
+        tabletTimer.running = false;
+        onTabletFinish();
+        return;
+      }
+      paintTabletTimer();
+    }, 250);
+  }
+
+  function startTabletTimer() {
+    if (tabletTimer.running) return;
+    if (tabletTimer.remaining <= 0) { toast("먼저 시간을 골라 주세요", "⏰"); return; }
+    tabletTimer.ringing = false;
+    tabletTimer.endAt = Date.now() + tabletTimer.remaining * 1000;
+    tabletTimer.running = true;
+    ensureAudio();          // 사용자가 누를 때 미리 준비해 둬야 알람음이 나와요
+    startTabletInt();
+    paintTabletTimer();
+  }
+
+  function pauseTabletTimer() {
+    if (!tabletTimer.running) return;
+    tabletTimer.remaining = Math.max(0, Math.round((tabletTimer.endAt - Date.now()) / 1000));
+    stopTabletInt();
+    tabletTimer.running = false;
+    paintTabletTimer();
+  }
+
+  function resetTabletTimer() {
+    stopTabletInt();
+    tabletTimer.running = false;
+    tabletTimer.ringing = false;
+    tabletTimer.remaining = 0;
+    tabletTimer.total = 0;
+    tableTimerHideAlarm();
+    renderHome();
+  }
+
+  function setTabletPreset(min) {
+    if (tabletTimer.running) { toast("타이머가 도는 중엔 못 바꿔요", "⏳"); return; }
+    var m = Math.max(1, Math.min(180, Number(min) || 0));
+    tabletTimer.remaining = m * 60;
+    tabletTimer.total = m * 60;
+    tabletTimer.presetMin = m;
+    tabletTimer.ringing = false;
+    tableTimerHideAlarm();
+    paintTabletTimer();
+  }
+
+  function onTabletFinish() {
+    tabletTimer.remaining = 0;
+    tabletTimer.ringing = true;
+    paintTabletTimer();
+    tableTimerShowAlarm();
+    playAlarmChime(3);
+    try { if (navigator.vibrate) navigator.vibrate([200, 120, 200, 120, 400]); } catch (e) { /* 무시 */ }
+  }
+
+  function tableTimerShowAlarm() {
+    var overlay = qs("#alarmOverlay");
+    if (!overlay) return;
+    overlay.hidden = false;
+    document.body.classList.add("alarm-on");
+    var btn = qs("#alarmOkBtn");
+    if (btn) { try { btn.focus(); } catch (e) { /* 무시 */ } }
+  }
+
+  function tableTimerHideAlarm() {
+    var overlay = qs("#alarmOverlay");
+    if (overlay) overlay.hidden = true;
+    document.body.classList.remove("alarm-on");
+  }
+
+  function dismissAlarm() {
+    tableTimerHideAlarm();
+    tabletTimer.ringing = false;
+    tabletTimer.remaining = 0;
+    tabletTimer.total = 0;
+    renderHome();
+  }
+
+  function buildHomeHero() {
+    var box = el("div", "span-2");
+    box.innerHTML =
+      '<div class="card dl-hero" id="homeHero">' +
+        '<div class="clock-block">' +
+          '<div class="clock-ampm" id="bigClockAmpm">오전</div>' +
+          '<div class="clock-time" id="bigClock">--:--:--</div>' +
+          '<div class="clock-date" id="bigClockDate"></div>' +
+        '</div>' +
+        '<div class="tbl-timer" id="tabletTimer">' +
+          '<div class="tbl-head">⏰ 태블릿 끄기 타이머</div>' +
+          '<div class="tbl-face' + (tabletTimer.running && tabletTimer.remaining <= 10 ? " is-warn" : "") + '" id="tabTimerFace">' +
+            mmss(tabletTimer.remaining) + '</div>' +
+          '<div class="tbl-sub" id="tabTimerSub">' + esc(tabletTimerSubText()) + '</div>' +
+          '<div class="tbl-presets">' +
+            TABLET_PRESETS.map(function (m) {
+              return '<button class="tbl-preset' +
+                (!tabletTimer.running && tabletTimer.remaining === m * 60 ? " is-active" : "") +
+                '" type="button" data-action="tab-timer-preset" data-min="' + m + '">' + m + '분</button>';
+            }).join("") +
+          '</div>' +
+          '<div class="tbl-custom">' +
+            '<input type="number" id="tabTimerMin" min="1" max="180" placeholder="직접 입력(분)" aria-label="직접 입력(분)">' +
+            '<button class="btn btn-xs btn-ghost" type="button" data-action="tab-timer-custom">설정</button>' +
+          '</div>' +
+          '<div class="tbl-btns">' +
+            '<button class="btn btn-purple" type="button" data-action="tab-timer-toggle" id="tabTimerToggle">' +
+              (tabletTimer.running ? "⏸ 일시정지" : (tabletTimer.remaining > 0 ? "▶ 이어서" : "▶ 시작")) + '</button>' +
+            '<button class="btn btn-ghost" type="button" data-action="tab-timer-reset">↺ 초기화</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    return box;
+  }
+
+  function buildAllowanceCard() {
+    var st = routineStats(todayKey());
+    var pct = st.total ? Math.round(st.done / st.total * 100) : 0;
+    var box = el("div", "span-2");
+    box.innerHTML =
+      '<div class="card allowance-card" id="allowanceCard">' +
+        '<button class="allowance-main" type="button" data-action="open-routine" aria-label="미션 탭의 다인이 저녁 루틴으로 가기">' +
+          '<span class="allowance-ico" aria-hidden="true">💰</span>' +
+          '<span class="allowance-body">' +
+            '<span class="allowance-label">다인이 모은 용돈</span>' +
+            '<span class="allowance-total" id="allowanceTotal">' + esc(fmtWon(routineTotal())) + '</span>' +
+            '<span class="allowance-today" id="allowanceToday">' +
+              (st.total ? st.done + ' / ' + st.total + ' 완료 · 오늘 +' + fmtWon(st.earned) : '루틴 항목을 넣어 주세요') +
+            '</span>' +
+          '</span>' +
+          '<span class="allowance-go" aria-hidden="true">›</span>' +
+        '</button>' +
+        '<div class="progress" style="margin-top:12px"><i style="width:' + pct + '%"></i></div>' +
+        '<p class="allowance-hint">항목당 +' + fmtWon(ROUTINE_PER_ITEM) + ' · 모두 완료 시 보너스 +' + fmtWon(ROUTINE_ALL_BONUS) + '!</p>' +
+      '</div>';
+    return box;
+  }
+
   function renderHome() {
     var home = qs("#homeContent");
     if (!home) return;
@@ -786,6 +1209,10 @@
     home.appendChild(el("div", "home-grid"));
 
     var grid = qs(".home-grid", home);
+
+    // 맨 위: 큰 시계 + 태블릿 끄기 타이머, 그 아래 모은 용돈
+    grid.appendChild(buildHomeHero());
+    grid.appendChild(buildAllowanceCard());
 
     // 날씨 카드
     var wWrap = el("div");
@@ -850,10 +1277,12 @@
         '<div class="grow"><p class="title-font" style="font-size:16px">' + esc(me ? me.name : "") + '의 하루, 힘차게! ✨</p>' +
         '<p class="muted">공부하고 도장 모아서 요정 친구들을 만나요</p></div>' +
       '</div>';
-    grid.insertBefore(greet, grid.firstChild);
+    grid.insertBefore(greet, wWrap);
 
     renderHomeWeather();
     fetchWeather(false);
+    tickClock();
+    paintTabletTimer();
   }
 
   /* =========================================================
@@ -1186,6 +1615,54 @@
   /* =========================================================
      미션 + 할 일
      ========================================================= */
+  function buildRoutineCard() {
+    var card = el("div", "card routine-card");
+    card.id = "eveningRoutine";
+    var items = routineItems();
+    var st = routineStats(todayKey());
+    var pct = st.total ? Math.round(st.done / st.total * 100) : 0;
+
+    card.innerHTML =
+      '<div class="section-head">' +
+        '<div class="section-title"><span class="ico">🌙</span>다인이 저녁 루틴</div>' +
+        '<span class="section-note" id="routineTodayNote">' + esc(fmtDateKo(todayKey())) + '</span>' +
+      '</div>' +
+      '<div class="routine-summary">' +
+        '<div class="routine-total">' +
+          '<span class="rt-label">모은 용돈</span>' +
+          '<b id="routineTotal">' + esc(fmtWon(routineTotal())) + '</b>' +
+        '</div>' +
+        '<div class="routine-today">' +
+          '<b id="routineToday">' + st.done + ' / ' + st.total + ' 완료</b>' +
+          '<span>오늘 +' + esc(fmtWon(st.earned)) + '</span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="progress" style="margin-top:10px"><i style="width:' + pct + '%"></i></div>' +
+      '<p class="routine-hint">항목당 +' + fmtWon(ROUTINE_PER_ITEM) + ' · 모두 완료 시 보너스 +' + fmtWon(ROUTINE_ALL_BONUS) + '!</p>' +
+      (st.allDone ? '<p class="routine-bonus-on">🎉 오늘 보너스 +' + fmtWon(ROUTINE_ALL_BONUS) + ' 받았어요 — 하루 최대 ' + fmtWon(st.earned) + '</p>' : '') +
+      '<div class="routine-list" id="routineList">' +
+        (items.length ? items.map(function (it) {
+          var on = !!routineDay(todayKey()).checked[it.id];
+          return '<div class="routine-item' + (on ? " done" : "") + '" data-routine="' + esc(it.id) + '">' +
+            '<button class="check-btn" type="button" data-action="toggle-routine" data-id="' + esc(it.id) + '"' +
+              ' aria-label="' + esc(it.name) + ' 완료 체크" aria-pressed="' + (on ? "true" : "false") + '">✓</button>' +
+            '<span class="txt">' + esc(it.name) + '</span>' +
+            '<span class="rt-reward">+' + fmtWon(ROUTINE_PER_ITEM) + '</span>' +
+            '<button class="mini-icon" type="button" data-action="delete-routine" data-id="' + esc(it.id) + '" aria-label="' + esc(it.name) + ' 삭제">🗑️</button>' +
+          '</div>';
+        }).join("") : '<p class="cl-empty">아직 루틴 항목이 없어요. 아래에서 추가해 주세요.</p>') +
+      '</div>' +
+      '<div class="rt-add">' +
+        '<input type="text" id="routineInput" maxlength="30" placeholder="루틴 추가 (예: 일기 쓰기)" aria-label="저녁 루틴 항목">' +
+        '<button class="btn btn-xs btn-soft" type="button" data-action="add-routine">추가</button>' +
+      '</div>' +
+      '<div class="routine-foot">' +
+        '<button class="btn btn-xs btn-ghost" type="button" data-action="allowance-spend">💰 용돈 쓰기</button>' +
+        '<button class="btn btn-xs btn-ghost" type="button" data-action="allowance-reset">↺ 용돈 초기화</button>' +
+      '</div>';
+    return card;
+  }
+
   function renderMission() {
     var root = qs("#missionContent");
     if (!root) return;
@@ -1212,6 +1689,9 @@
         '</div>' +
       '</div>';
     root.appendChild(mCard);
+
+    // 🌙 다인이 저녁 루틴 (항목당 +100원 · 모두 완료 시 +500원)
+    root.appendChild(buildRoutineCard());
 
     // 할 일
     var todoHead = el("div", "section-head");
@@ -2102,6 +2582,47 @@
         break;
       }
 
+      /* 저녁 루틴 · 용돈 */
+      case "toggle-routine": toggleRoutineItem(id); break;
+      case "add-routine": {
+        var rdInput = qs("#routineInput");
+        var added = addRoutineItem(rdInput ? rdInput.value : "");
+        if (added) {
+          var again = qs("#routineInput");
+          if (again) again.focus();
+        }
+        break;
+      }
+      case "delete-routine": deleteRoutineItem(id); break;
+      case "allowance-spend": openSpendAllowance(); break;
+      case "allowance-reset": resetAllowance(); break;
+      case "open-routine": {
+        switchTab("mission");
+        var routineEl = qs("#eveningRoutine");
+        if (routineEl) {
+          try { routineEl.scrollIntoView({ behavior: "smooth", block: "start" }); } catch (e) { try { routineEl.scrollIntoView(); } catch (e2) { /* 무시 */ } }
+          routineEl.classList.add("is-flash");
+          setTimeout(function () { routineEl.classList.remove("is-flash"); }, 1700);
+        }
+        break;
+      }
+
+      /* 홈 — 태블릿 끄기 타이머 */
+      case "tab-timer-preset": setTabletPreset(btn.getAttribute("data-min")); break;
+      case "tab-timer-custom": {
+        var tmin = Number(qs("#tabTimerMin") && qs("#tabTimerMin").value);
+        if (!tmin || tmin < 1) { toast("분을 넣어 주세요", "⏳"); return; }
+        setTabletPreset(tmin);
+        toast(qs("#tabTimerMin") ? Math.min(180, tmin) + "분 타이머 준비" : "", "⏰");
+        break;
+      }
+      case "tab-timer-toggle":
+        if (tabletTimer.running) pauseTabletTimer();
+        else startTabletTimer();
+        break;
+      case "tab-timer-reset": resetTabletTimer(); break;
+      case "dismiss-alarm": dismissAlarm(); break;
+
       /* todos */
       case "add-todo": openAddTodo(who); break;
       case "toggle-todo": {
@@ -2298,6 +2819,17 @@
     if (e.key === "Escape" && !qs("#modalRoot").hidden) closeModal();
   });
 
+  // 저녁 루틴 추가 입력에서 Enter
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Enter") return;
+    var t = e.target;
+    if (t && t.id === "routineInput") {
+      e.preventDefault();
+      var ok = addRoutineItem(t.value);
+      if (ok) { var again = qs("#routineInput"); if (again) again.focus(); }
+    }
+  });
+
   qs("#chatForm").addEventListener("submit", function (e) {
     e.preventDefault();
     var input = qs("#chatInput");
@@ -2324,6 +2856,7 @@
   /* ---------- 시작 ---------- */
   function boot() {
     store = Store.create(CFG);
+    setInterval(tickClock, 1000);
     unsubStore = store.subscribe(function (payload, updatedAt) {
       // 다른 기기의 변경 반영 (내가 방금 저장한 것은 무시)
       if (!payload) return;

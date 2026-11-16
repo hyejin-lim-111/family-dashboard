@@ -10,9 +10,12 @@
 <title>우리 가족 기록장</title>
 <link rel="icon" href="favicon.png">
 <link rel="apple-touch-icon" href="favicon.png">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<!-- 본문 글씨: Pretendard (깨끗한 고딕) + Noto Sans KR 폴백 -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&display=swap">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -129,6 +132,17 @@
     </button>
   </nav>
 
+</div>
+
+<!-- 태블릿 끄기 알람 (타이머가 00:00 이 되면 화면 전체를 덮어요) -->
+<div class="alarm-overlay" id="alarmOverlay" hidden role="alertdialog" aria-modal="true" aria-labelledby="alarmTitle" aria-describedby="alarmMsg">
+  <div class="alarm-box">
+    <div class="alarm-emoji" aria-hidden="true">⏰</div>
+    <h2 class="alarm-title" id="alarmTitle">시간이 다 됐어요!</h2>
+    <p class="alarm-msg" id="alarmMsg">이제 태블릿을 꺼 주세요!</p>
+    <p class="alarm-note">잘 했어요 — 내일 또 만나요 🌙</p>
+    <button class="btn btn-primary btn-block alarm-btn" type="button" data-action="dismiss-alarm" id="alarmOkBtn">확인했어요</button>
+  </div>
 </div>
 
 <div class="modal-root" id="modalRoot" hidden>
