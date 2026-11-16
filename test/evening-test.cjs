@@ -143,18 +143,18 @@ function legacyPayload() {
     check("보너스 안내 표시", !!t.$(".routine-bonus-on"), t.$("#eveningRoutine").textContent.slice(0, 80));
 
     await toggle("r-brush");
-    check("체크 해제 → 항목 100원 + 보너스 500원 함께 회수 (300원)", t.$("#routineTotal").textContent === "300원", t.$("#routineTotal").textContent);
+    check("체크를 풀어도 오늘 모은 돈은 그대로 900원 (쓸 때만 줄어요)", t.$("#routineTotal").textContent === "900원", t.$("#routineTotal").textContent);
     check("보너스 안내 사라짐", !t.$(".routine-bonus-on"));
 
     await toggle("r-brush");
-    check("다시 모두 완료 → 900원 (보너스는 하루 1회만)", t.$("#routineTotal").textContent === "900원", t.$("#routineTotal").textContent);
+    check("다시 모두 완료해도 900원 (같은 돈이 두 번 붙지 않음)", t.$("#routineTotal").textContent === "900원", t.$("#routineTotal").textContent);
     await toggle("r-brush");
     await toggle("r-brush");
     await toggle("r-brush");
     await toggle("r-brush");
     check("여러 번 반복해도 하루 최대 900원 유지", t.$("#routineTotal").textContent === "900원", t.$("#routineTotal").textContent);
 
-    // 항목 추가 → 오늘 계산이 다시 되어 보너스가 잠시 풀린다
+    // 항목 추가 → 오늘 계산은 4/5 로 바뀌지만, 이미 모은 900원은 사라지지 않는다
     t.click(t.$('[data-action="add-routine"]'));
     await sleep(200);
     check("빈 입력은 추가되지 않음", t.$$(".routine-item").length === 4);
@@ -163,7 +163,8 @@ function legacyPayload() {
     await sleep(350);
     check("항목 추가 (5개)", t.$$(".routine-item").length === 5, String(t.$$(".routine-item").length));
     check("새 항목 이름 반영", t.$$(".routine-item .txt").map((e) => e.textContent).join(",").includes("일기 쓰기"));
-    check("항목이 늘면 보너스 잠시 풀림 → 400원", t.$("#routineTotal").textContent === "400원", t.$("#routineTotal").textContent);
+    check("항목이 늘어도 모은 돈은 그대로 900원", t.$("#routineTotal").textContent === "900원", t.$("#routineTotal").textContent);
+    check("오늘 완료는 4 / 5 로 다시 계산", t.$("#routineToday").textContent === "4 / 5 완료", t.$("#routineToday").textContent);
 
     const newId = t.$$(".routine-item")[4].getAttribute("data-routine");
     await toggle(newId);
@@ -177,7 +178,7 @@ function legacyPayload() {
     t.click(t.$("#confirmOkBtn"));
     await sleep(350);
     check("항목 삭제 후 4개", t.$$(".routine-item").length === 4, String(t.$$(".routine-item").length));
-    check("지운 항목 체크도 정리 → 900원", t.$("#routineTotal").textContent === "900원", t.$("#routineTotal").textContent);
+    check("항목을 지워도 그날 모은 돈은 그대로 1,000원", t.$("#routineTotal").textContent === "1,000원", t.$("#routineTotal").textContent);
     check("삭제해도 기록은 저장됨", t.saved().routine.items.length === 4);
 
     // 용돈 쓰기 / 초기화
@@ -187,11 +188,11 @@ function legacyPayload() {
     t.$("#spendAmount").value = "2000";
     t.click(t.$("#spendOkBtn"));
     await sleep(150);
-    check("모은 금액보다 많이 쓰지 못함", t.$("#routineTotal") && t.$("#routineTotal").textContent === "900원", t.$("#routineTotal") && t.$("#routineTotal").textContent);
+    check("모은 금액보다 많이 쓰지 못함", t.$("#routineTotal") && t.$("#routineTotal").textContent === "1,000원", t.$("#routineTotal") && t.$("#routineTotal").textContent);
     t.$("#spendAmount").value = "300";
     t.click(t.$("#spendOkBtn"));
     await sleep(300);
-    check("용돈 300원 차감 → 600원", t.$("#routineTotal").textContent === "600원", t.$("#routineTotal").textContent);
+    check("용돈 300원 차감 → 700원", t.$("#routineTotal").textContent === "700원", t.$("#routineTotal").textContent);
     check("차감액 저장", t.saved().routine.spent === 300, String(t.saved().routine.spent));
 
     t.click(t.$('[data-action="allowance-reset"]'));

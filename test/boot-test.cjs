@@ -245,7 +245,7 @@ function check(name, cond, extra) {
   check("하단 탭 7개", $$(".tab-btn").length === 7, "got " + $$(".tab-btn").length);
   check("기본 화면은 달력", $("#togetherContent").getAttribute("data-sub") === "calendar");
   check("달력 42칸", $$(".cal-cell").length === 42, "got " + $$(".cal-cell").length);
-  check("요일 머리글 7개", $$(".cal-dow span").length === 7);
+  check("요일 머리글 7개", $$("#togetherContent .cal-dow span").length === 7);
   check("이번 달 라벨", $("#calMonthLabel").textContent === mo + "월 " + yy, $("#calMonthLabel").textContent);
   check("오늘 칸 강조", !!$(".cal-cell.is-today"));
   check("기본 선택은 오늘", $(".cal-cell.is-selected").getAttribute("data-date") === todayKey, $(".cal-cell.is-selected").getAttribute("data-date"));

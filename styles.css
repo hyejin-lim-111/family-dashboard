@@ -1538,6 +1538,62 @@ h1, h2, h3, .title-font { font-family: var(--font-title); font-weight: 700; lett
 .rt-add input:focus { border-color: #CBB6F0; box-shadow: 0 0 0 3px rgba(169, 139, 232, 0.16); }
 .routine-foot { display: flex; gap: 6px; justify-content: flex-end; margin-top: 10px; }
 
+/* ---------------- 미션: 용돈 달력 ---------------- */
+
+.allowance-calendar-card {
+  border-color: #F3E3C4;
+  background: linear-gradient(170deg, #FFFFFF 0%, #FFFBF2 100%);
+}
+.acal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-top: 6px; }
+.acal-cell {
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 1px;
+  min-height: 48px;
+  padding: 5px 1px 4px;
+  border: 1.5px solid transparent;
+  border-radius: 13px;
+  background: #FFFDFA;
+  color: var(--ink);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.acal-cell:active { transform: scale(0.97); }
+.acal-num {
+  position: relative;
+  font-family: var(--font-num); font-size: 12.5px; line-height: 1.15; color: var(--ink-soft);
+}
+.acal-bonus { position: absolute; top: -3px; right: -11px; font-size: 8px; font-style: normal; }
+.acal-earn {
+  font-family: var(--font-num); font-size: 9.5px; font-weight: 700; line-height: 1.1;
+  color: #B97615; font-variant-numeric: tabular-nums;
+}
+.acal-cell.has-earn { background: #FFF8EA; border-color: #F6E3BE; }
+.acal-cell.has-earn .acal-num { color: #8A5A2B; font-weight: 700; }
+.acal-spend {
+  font-family: var(--font-num); font-size: 9px; font-weight: 700; line-height: 1.1; color: #C0553F;
+  font-variant-numeric: tabular-nums;
+}
+.acal-cell.is-out { background: transparent; }
+.acal-cell.is-out .acal-num { color: #D8C9BC; }
+.acal-cell.is-today { border-color: #F5B9CD; background: #FFF0F5; }
+.acal-cell.is-today .acal-num { color: #C2557C; font-weight: 800; }
+.acal-cell.is-selected { border-color: #E7B98D; background: #FFF4E4; box-shadow: var(--shadow-tiny); }
+.acal-sum {
+  display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline;
+  margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line);
+  font-size: 12px; color: var(--ink-soft);
+}
+.acal-sum b { font-family: var(--font-num); font-size: 14px; font-weight: 800; color: #B97615; }
+.acal-sum b.is-spend { color: #C0553F; }
+.acal-sum-item.is-total { margin-left: auto; }
+.acal-sum-item.is-total b { color: #6C51B8; font-size: 16px; }
+.acal-detail {
+  margin-top: 9px; padding: 8px 11px; border-radius: 12px;
+  background: #FFFDF8; border: 1px solid var(--line);
+  font-size: 12px; line-height: 1.5; color: var(--ink-soft);
+}
+.acal-detail b { color: #3A2F29; }
+.acal-detail-items { color: #8A7A6C; font-size: 11.5px; }
+.acal-foot { margin-top: 8px; font-size: 11.5px; font-weight: 600; color: #8A6A2B; }
+
 /* ---------------- 태블릿 끄기 알람 ---------------- */
 
 .alarm-overlay {
@@ -1884,6 +1940,10 @@ body.alarm-on { overflow: hidden; }
   .cl-wrap { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
   .cal-cell { min-height: 54px; padding: 6px 2px 5px; }
   .cal-cell .cal-num { font-size: 15px; }
+  .acal-cell { min-height: 58px; }
+  .acal-num { font-size: 13.5px; }
+  .acal-earn { font-size: 11px; }
+  .acal-spend { font-size: 10.5px; }
   .seg-btn { font-size: 14px; }
   .cal-month { font-size: 19px; }
 
@@ -1916,6 +1976,9 @@ body.alarm-on { overflow: hidden; }
   .tab-btn .tab-ico { font-size: 18px; }
   .cal-cell { min-height: 42px; border-radius: 12px; }
   .cal-cell .cal-num { font-size: 12.5px; }
+  .acal-cell { min-height: 44px; border-radius: 11px; }
+  .acal-earn { font-size: 8.5px; }
+  .acal-spend { font-size: 8px; }
   .event-row { padding: 8px; gap: 7px; }
   .seg-btn { font-size: 12px; padding: 8px 4px; }
   .clock-time { font-size: 46px; }

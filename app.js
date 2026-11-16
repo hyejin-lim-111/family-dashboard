@@ -473,9 +473,27 @@
       Object.keys(srcChecked).forEach(function (id) {
         if (srcChecked[id]) checked[String(id)] = true;
       });
-      out.days[k] = { checked: checked };
+      var dayRec = { checked: checked };
+      // 그날 실제로 적립된 금액(기록). 루틴 항목을 고치거나 지워도 이 값은 줄지 않는다
+      var earned = Math.max(0, Math.round(Number(rec.earned) || 0));
+      if (earned > 0) dayRec.earned = earned;
+      if (rec.bonus) dayRec.bonus = true;
+      out.days[k] = dayRec;
     });
     out.spent = Math.max(0, Math.round(Number(src && src.spent) || 0));
+    // 용돈 사용 내역(날짜별 장부) — 달력에서 어느 날 얼마를 썼는지 보여 준다
+    out.spends = [];
+    if (src && Array.isArray(src.spends)) {
+      src.spends.forEach(function (s) {
+        if (!s || !s.id || !(Number(s.amount) > 0)) return;
+        out.spends.push({
+          id: String(s.id),
+          amount: Math.max(0, Math.round(Number(s.amount) || 0)),
+          at: typeof s.at === "string" ? s.at : "",
+          date: isDateKey(s.date) ? s.date : ""
+        });
+      });
+    }
     return out;
   }
 
@@ -690,8 +708,9 @@
       checklists: { lists: defaultLists() }, // 가족 공유 체크리스트
       routine: {                          // 다인이 저녁 루틴 + 용돈
         items: JSON.parse(JSON.stringify(DEFAULT_ROUTINE_ITEMS)),
-        days: {},                         // "YYYY-MM-DD": { checked: { itemId: true } }
-        spent: 0                          // 부모님이 쓴(차감한) 용돈
+        days: {},                         // "YYYY-MM-DD": { checked: { itemId: true }, earned: 적립액 }
+        spent: 0,                         // 쓴(차감한) 용돈 합계
+        spends: []                        // 쓴 내역: [{id, amount, at, date}]
       },
       growth: normalizeGrowth(null),        // 다인이 키·몸무게 성장 기록
       pet: normalizePet(null),              // 🐣 내 캐릭터(용돈·할 일로 자라는 요정)
@@ -754,6 +773,7 @@
     out.quickPhrases = normalizeQuickPhrases(out.quickPhrases);
     out.checklists.lists = normalizeLists(out.checklists.lists);
     out.routine = normalizeRoutine(out.routine);
+    routineFreezePast(out);          // 지난 날 모은 돈을 기록으로 굳혀 둔다(날짜가 바뀌어도 유지)
     out.growth = normalizeGrowth(out.growth);
     out.pet = normalizePet(out.pet);
     return out;
@@ -827,10 +847,12 @@
   }
 
   // 어떤 날짜든 [그 날 체크한 항목] × 100원 + (그날 항목을 모두 완료했으면) 500원
-  // → 체크를 풀면 그 항목 금액과 보너스가 함께 사라지고, 다시 다 하면 다시 붙는다. 하루 최대 보너스 1회.
-  function routineStats(dateKey) {
-    var items = routineItems();
-    var checked = routineDay(dateKey).checked;
+  // → 오늘은 체크를 풀면 그 항목 금액과 보너스가 함께 사라지고, 다시 다 하면 다시 붙는다. 하루 최대 보너스 1회.
+  function routineStatsIn(st, dateKey) {
+    var items = (st && st.routine && st.routine.items) || [];
+    var days = (st && st.routine && st.routine.days) || {};
+    var rec = (days[dateKey] && typeof days[dateKey] === "object") ? days[dateKey] : {};
+    var checked = (rec.checked && typeof rec.checked === "object") ? rec.checked : {};
     var done = 0;
     items.forEach(function (it) { if (checked[it.id]) done += 1; });
     var allDone = items.length > 0 && done === items.length;
@@ -842,18 +864,92 @@
     };
   }
 
+  function routineStats(dateKey) { return routineStatsIn(state, dateKey || todayKey()); }
+
+  // 그 날 실제로 적립된 금액 = 기록에 굳힌 값과 지금 체크 계산값 중 큰 쪽
+  //  → 날짜가 바뀌어도, 체크를 풀어도, 루틴 항목을 고치거나 지워도 그날 모은 돈은 줄지 않는다.
+  //    (돈이 줄어드는 건 오직 '용돈 쓰기'뿐 — 혜진님이 정하신 규칙)
+  function routineDayEarnedIn(st, dateKey) {
+    var key = dateKey || todayKey();
+    var days = (st && st.routine && st.routine.days) || {};
+    var rec = (days[key] && typeof days[key] === "object") ? days[key] : null;
+    var stored = Math.max(0, Math.round(Number(rec && rec.earned) || 0));
+    var live = routineStatsIn(st, key).earned;
+    return Math.max(stored, live);
+  }
+
+  function routineDayEarned(dateKey) { return routineDayEarnedIn(state, dateKey || todayKey()); }
+
+  function routineDayBonus(dateKey) {
+    var key = dateKey || todayKey();
+    var days = (state.routine && state.routine.days) || {};
+    var rec = (days[key] && typeof days[key] === "object") ? days[key] : null;
+    return !!(rec && rec.bonus) || routineStatsIn(state, key).allDone;
+  }
+
   function routineEarned() {
     var days = (state.routine && state.routine.days) || {};
     var sum = 0;
     Object.keys(days).forEach(function (k) {
       if (!isDateKey(k)) return;
-      sum += routineStats(k).earned;
+      sum += routineDayEarnedIn(state, k);
     });
     return sum;
   }
 
+  // 지난 날들의 적립액을 기록에 굳힌다 — 날짜가 바뀌거나 루틴 항목을 고쳐도 그날 모은 돈이 줄지 않게
+  function routineFreezePast(target) {
+    var st = (target && target.routine) ? target : state;
+    if (!st || !st.routine) return;
+    if (!st.routine.days) st.routine.days = {};
+    var today = todayKey();
+    Object.keys(st.routine.days).forEach(function (k) {
+      if (!isDateKey(k) || k === today) return;
+      var rec = st.routine.days[k];
+      if (!rec || typeof rec !== "object") return;
+      rec.earned = routineDayEarnedIn(st, k);
+      if (routineStatsIn(st, k).allDone) rec.bonus = true;
+    });
+  }
+
+  // 오늘 기록에 지금 적립액을 적어 둔다 — 한 번 모은 돈은 줄지 않게(큰 값 유지).
+  // 내일이 되어도 그 값이 그대로 남아 누적되고, 체크를 풀거나 항목을 고쳐도 사라지지 않는다.
+  function routineSyncToday() {
+    if (!state.routine) return;
+    var rec = routineDay(todayKey());
+    var st = routineStats(todayKey());
+    var stored = Math.max(0, Math.round(Number(rec.earned) || 0));
+    rec.earned = Math.max(stored, st.earned);
+    if (st.allDone) rec.bonus = true;
+  }
+
+  // 용돈 사용 내역(날짜별 장부)
+  function routineSpendList() {
+    var list = (state.routine && Array.isArray(state.routine.spends)) ? state.routine.spends : [];
+    return list.filter(function (s) {
+      return s && s.id && Number(s.amount) > 0;
+    }).map(function (s) {
+      return {
+        id: String(s.id),
+        amount: Math.max(0, Math.round(Number(s.amount) || 0)),
+        at: typeof s.at === "string" ? s.at : "",
+        date: isDateKey(s.date) ? s.date : ""
+      };
+    });
+  }
+
   function routineSpent() {
+    var list = routineSpendList();
+    if (list.length) {
+      return list.reduce(function (n, s) { return n + s.amount; }, 0);
+    }
+    // 예전 기록(spent 숫자만 있던 때)도 그대로 인정
     return Math.max(0, Math.round(Number(state.routine && state.routine.spent) || 0));
+  }
+
+  function routineSpentOn(dateKey) {
+    return routineSpendList().filter(function (s) { return s.date === dateKey; })
+      .reduce(function (n, s) { return n + s.amount; }, 0);
   }
 
   function routineTotal() {
@@ -871,18 +967,18 @@
     if (rec.checked[id]) delete rec.checked[id];
     else rec.checked[id] = true;
     var st = routineStats(todayKey());
+    routineSyncToday();               // 오늘 적립액을 기록에 반영 (모은 돈은 줄지 않아요)
     if (rec.checked[id] && st.allDone) petAward("routine-all", PET_XP.routineAll);
     petCheckLevel();
     persist(true);
     renderAll();
+    var total = routineTotal();
     if (rec.checked[id] && st.allDone) {
-      toast("저녁 루틴 모두 완료! +" + fmtWon(st.earned) + " (보너스 " + fmtWon(ROUTINE_ALL_BONUS) + " 포함)", "🎉");
+      toast("저녁 루틴 모두 완료! +" + fmtWon(st.earned) + " (보너스 " + fmtWon(ROUTINE_ALL_BONUS) + " 포함) · 모은 용돈 " + fmtWon(total), "🎉");
     } else if (rec.checked[id]) {
-      toast("『" + routineByName(id) + "』 +" + fmtWon(ROUTINE_PER_ITEM), "💰");
-    } else if (st.allDone) {
-      toast("체크를 풀었어요 — 오늘 " + fmtWon(st.earned), "↩️");
+      toast("『" + routineByName(id) + "』 +" + fmtWon(ROUTINE_PER_ITEM) + " · 모은 용돈 " + fmtWon(total), "💰");
     } else {
-      toast("체크를 풀었어요 — 오늘 " + fmtWon(st.earned), "↩️");
+      toast("체크를 풀었어요 — 모은 돈은 그대로 " + fmtWon(total) + " (줄이려면 용돈 쓰기)", "↩️");
     }
   }
 
@@ -892,6 +988,7 @@
     var items = routineItems();
     if (items.some(function (x) { return x.name === t; })) { toast("이미 있는 항목이에요", "🌙"); return false; }
     if (items.length >= 12) { toast("항목은 12개까지 넣을 수 있어요", "🌙"); return false; }
+    routineSyncToday();                // 항목이 늘어 계산이 줄어도 오늘 모은 돈은 그대로
     state.routine.items.push({ id: uid("r"), name: t.slice(0, 30) });
     persist(true);
     renderAll();
@@ -902,16 +999,15 @@
   function deleteRoutineItem(id) {
     var name = routineByName(id);
     if (!name) return;
-    confirmModal("루틴 항목 삭제", "『" + name + "』을(를) 저녁 루틴에서 지울까요? 지금까지 모은 용돈은 그대로예요.", "삭제", function () {
+    confirmModal("루틴 항목 삭제", "『" + name + "』을(를) 저녁 루틴에서 지울까요? 지금까지 모은 용돈은 날짜별 기록으로 그대로 남아요.", "삭제", function () {
+      routineSyncToday();            // 지우기 전에 오늘 적립액을 기록으로 굳힌다
+      routineFreezePast();           // 지난 날 적립액도 그대로 지켜진다
       state.routine.items = routineItems().filter(function (x) { return x.id !== id; });
       markDeleted("routineItems", id);
-      // 지운 항목의 체크도 오늘 기록에서 정리 (금액은 자동으로 다시 계산돼요)
-      Object.keys(state.routine.days || {}).forEach(function (k) {
-        if (state.routine.days[k] && state.routine.days[k].checked) delete state.routine.days[k].checked[id];
-      });
+      // 지난 기록의 체크는 남겨 둔다 — 달력에서 그날 무엇을 했는지 볼 수 있게
       persist(true);
       renderAll();
-      toast("『" + name + "』을(를) 지웠어요", "🌙");
+      toast("『" + name + "』을(를) 지웠어요 · 지금까지 모은 용돈 " + fmtWon(routineTotal()), "🌙");
     });
   }
 
@@ -933,7 +1029,14 @@
       if (v <= 0) { toast("금액을 넣어 주세요", "💰"); return; }
       var left = routineTotal();
       if (v > left) { toast("모은 용돈(" + fmtWon(left) + ")보다 많아요", "💰"); return; }
-      state.routine.spent = routineSpent() + v;
+      if (!Array.isArray(state.routine.spends)) state.routine.spends = [];
+      // 예전 기록(spent 숫자만 있던 때)에 쓴 돈이 있으면 장부로 옮겨 둔다
+      if (!routineSpendList().length) {
+        var legacy = Math.max(0, Math.round(Number(state.routine.spent) || 0));
+        if (legacy) state.routine.spends.push({ id: "spend-legacy", amount: legacy, at: "", date: "" });
+      }
+      state.routine.spends.push({ id: uid("sp"), amount: v, at: new Date().toISOString(), date: todayKey() });
+      state.routine.spent = routineSpent();
       closeModal();
       persist(true);
       renderAll();
@@ -945,6 +1048,7 @@
     confirmModal("용돈 기록 초기화", "모은 용돈과 날짜별 루틴 기록을 모두 지우고 0원부터 다시 시작해요. 루틴 항목 목록은 그대로 둘게요. 계속할까요?", "초기화", function () {
       petMoneyXp();          // 지금까지 용돈으로 자란 경험치는 그대로 남겨요 (최고 기록 유지)
       state.routine.days = {};
+      state.routine.spends = [];
       state.routine.spent = 0;
       persist(true);
       renderAll();
@@ -1247,6 +1351,7 @@
     if (node && node.textContent !== text) node.textContent = text;
   }
 
+  var lastDayKey = null;
   function tickClock() {
     var now = new Date();
     var h = now.getHours();
@@ -1255,6 +1360,15 @@
     setTextById("bigClockAmpm", h < 12 ? "오전" : "오후");
     setTextById("bigClock", pad2(hh) + ":" + pad2(now.getMinutes()) + ":" + pad2(now.getSeconds()));
     setTextById("bigClockDate", fmtDateKo(key) + " " + DOW_KO[dowOfKey(key)] + "요일");
+    if (lastDayKey && lastDayKey !== key) {
+      // 자정을 넘겼다 — 어제 적립액을 기록으로 굳히고 오늘 화면으로 새로 시작
+      lastDayKey = key;
+      routineFreezePast();
+      rollDailyState(state);
+      persist(true);
+      renderAll();
+    }
+    lastDayKey = key;
   }
 
   function ensureAudio() {
@@ -2352,7 +2466,7 @@
         '</div>' +
       '</div>' +
       '<div class="progress" style="margin-top:10px"><i style="width:' + pct + '%"></i></div>' +
-      '<p class="routine-hint">항목당 +' + fmtWon(ROUTINE_PER_ITEM) + ' · 모두 완료 시 보너스 +' + fmtWon(ROUTINE_ALL_BONUS) + '!</p>' +
+      '<p class="routine-hint">항목당 +' + fmtWon(ROUTINE_PER_ITEM) + ' · 모두 완료 시 보너스 +' + fmtWon(ROUTINE_ALL_BONUS) + ' · 모은 돈은 쓸 때만 줄어요</p>' +
       (st.allDone ? '<p class="routine-bonus-on">🎉 오늘 보너스 +' + fmtWon(ROUTINE_ALL_BONUS) + ' 받았어요 — 하루 최대 ' + fmtWon(st.earned) + '</p>' : '') +
       '<div class="routine-list" id="routineList">' +
         (items.length ? items.map(function (it) {
@@ -2374,6 +2488,105 @@
         '<button class="btn btn-xs btn-ghost" type="button" data-action="allowance-spend">💰 용돈 쓰기</button>' +
         '<button class="btn btn-xs btn-ghost" type="button" data-action="allowance-reset">↺ 용돈 초기화</button>' +
       '</div>';
+    return card;
+  }
+
+  /* ---------- 💰 용돈 달력 (하루하루 얼마 적립·사용했는지) ---------- */
+  var ALLOW_VIEW = null;
+
+  function ensureAllowView() {
+    if (ALLOW_VIEW) return;
+    var p = splitKey(todayKey());
+    ALLOW_VIEW = { y: p.y, m: p.m, selected: todayKey() };
+  }
+
+  function allowGoto(y, m) {
+    while (m < 0) { m += 12; y -= 1; }
+    while (m > 11) { m -= 12; y += 1; }
+    ALLOW_VIEW.y = y;
+    ALLOW_VIEW.m = m;
+  }
+
+  function allowAmountText(n) {
+    // 칸 안에 들어가게 짧게: +900원 / +1,200원
+    return String(Math.abs(Math.round(Number(n) || 0))).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  }
+
+  function buildAllowanceCalendarCard() {
+    ensureAllowView();
+    var today = todayKey();
+    var cells = monthCells(ALLOW_VIEW.y, ALLOW_VIEW.m);
+    while (cells.length > 7 && cells.slice(-7).every(function (c) { return !c.inMonth; })) {
+      cells = cells.slice(0, -7);
+    }
+    var sel = ALLOW_VIEW.selected || today;
+
+    var monthEarned = 0, monthSpent = 0, earnDays = 0;
+    cells.forEach(function (c) {
+      if (!c.inMonth) return;
+      var e = routineDayEarned(c.key);
+      if (e > 0) earnDays += 1;
+      monthEarned += e;
+      monthSpent += routineSpentOn(c.key);
+    });
+
+    var cellHtml = cells.map(function (c) {
+      var earned = routineDayEarned(c.key);
+      var spent = routineSpentOn(c.key);
+      var bonus = earned > 0 && routineDayBonus(c.key);
+      var cls = "acal-cell" + (c.inMonth ? "" : " is-out") +
+        (c.key === today ? " is-today" : "") +
+        (c.key === sel ? " is-selected" : "") +
+        (earned > 0 ? " has-earn" : "") + (spent > 0 ? " has-spend" : "");
+      var label = fmtDayLabel(c.key) +
+        (earned > 0 ? " · 적립 " + fmtWon(earned) : "") +
+        (bonus ? " (모두 완료 보너스 포함)" : "") +
+        (spent > 0 ? " · 사용 " + fmtWon(spent) : "");
+      return '<button class="' + cls + '" type="button" data-action="allow-pick" data-date="' + esc(c.key) + '"' +
+        ' aria-pressed="' + (c.key === sel ? "true" : "false") + '"' +
+        ' aria-label="' + esc(label) + '">' +
+        '<span class="acal-num">' + c.day + (bonus ? '<i class="acal-bonus" aria-hidden="true">🎁</i>' : '') + '</span>' +
+        (earned > 0 ? '<span class="acal-earn">+' + allowAmountText(earned) + '원</span>' : '') +
+        (spent > 0 ? '<span class="acal-spend">-' + allowAmountText(spent) + '원</span>' : '') +
+      '</button>';
+    }).join("") || '<p class="cl-empty">기록이 없어요</p>';
+
+    // 고른 날 자세히 — 그날 한 항목, 적립·사용 내역
+    var selEarned = routineDayEarned(sel);
+    var selBonus = selEarned > 0 && routineDayBonus(sel);
+    var selSpent = routineSpentOn(sel);
+    var selChecked = ((state.routine.days || {})[sel] || {}).checked || {};
+    var selNames = routineItems().filter(function (it) { return selChecked[it.id]; })
+      .map(function (it) { return it.name; });
+    var selParts = [];
+    if (selEarned > 0) selParts.push("적립 " + fmtWon(selEarned) + (selBonus ? " (보너스 포함)" : ""));
+    if (selSpent > 0) selParts.push("사용 " + fmtWon(selSpent));
+    if (!selParts.length) selParts.push("적립·사용 없음");
+
+    var card = el("div", "card allowance-calendar-card");
+    card.id = "allowanceCalendar";
+    card.innerHTML =
+      '<div class="section-head"><div class="section-title"><span class="ico">🗓️</span>용돈 달력</div>' +
+        '<span class="section-note">하루하루 모은 돈</span></div>' +
+      '<div class="cal-nav">' +
+        '<button class="cal-arrow" type="button" data-action="allow-month" data-delta="-1" aria-label="이전 달">‹</button>' +
+        '<div class="cal-center"><span class="cal-month" id="allowMonthLabel">' + (ALLOW_VIEW.m + 1) + '월 ' + ALLOW_VIEW.y + '</span>' +
+          '<button class="cal-today" type="button" data-action="allow-today">오늘</button></div>' +
+        '<button class="cal-arrow" type="button" data-action="allow-month" data-delta="1" aria-label="다음 달">›</button>' +
+      '</div>' +
+      '<div class="cal-dow">' + DOW_KO.map(function (d, i) {
+        return '<span class="' + (i === 0 ? "sun" : i === 6 ? "sat" : "") + '">' + d + '</span>';
+      }).join("") + '</div>' +
+      '<div class="acal-grid" id="allowGrid">' + cellHtml + '</div>' +
+      '<div class="acal-sum">' +
+        '<span class="acal-sum-item">이번 달 적립 <b>+' + esc(fmtWon(monthEarned)) + '</b></span>' +
+        (monthSpent > 0 ? '<span class="acal-sum-item">사용 <b class="is-spend">-' + esc(fmtWon(monthSpent)) + '</b></span>' : '') +
+        '<span class="acal-sum-item is-total">지금 누적 <b>' + esc(fmtWon(routineTotal())) + '</b></span>' +
+      '</div>' +
+      '<p class="acal-detail" id="allowDetail"><b>' + esc(fmtDayLabel(sel)) + '</b> · ' + esc(selParts.join(" · ")) +
+        (selNames.length ? '<br><span class="acal-detail-items">✓ ' + esc(selNames.join(", ")) + '</span>' : '') +
+        '</p>' +
+      '<p class="acal-foot">' + esc(ALLOW_VIEW.m + 1) + '월에 ' + earnDays + '일 적립했어요 · 쓴 만큼만 줄고, 나머지는 계속 쌓여요 💰</p>';
     return card;
   }
 
@@ -2406,6 +2619,9 @@
 
     // 🌙 다인이 저녁 루틴 (항목당 +100원 · 모두 완료 시 +500원)
     root.appendChild(buildRoutineCard());
+
+    // 🗓️ 용돈 달력 — 하루하루 적립·사용 내역
+    root.appendChild(buildAllowanceCalendarCard());
 
     // 할 일
     var todoHead = el("div", "section-head");
@@ -4067,6 +4283,28 @@
       case "delete-routine": deleteRoutineItem(id); break;
       case "allowance-spend": openSpendAllowance(); break;
       case "allowance-reset": resetAllowance(); break;
+      case "allow-month": {
+        ensureAllowView();
+        allowGoto(ALLOW_VIEW.y, ALLOW_VIEW.m + Number(btn.getAttribute("data-delta") || 0));
+        renderMission();
+        break;
+      }
+      case "allow-today": {
+        ensureAllowView();
+        var ap = splitKey(todayKey());
+        ALLOW_VIEW.y = ap.y;
+        ALLOW_VIEW.m = ap.m;
+        ALLOW_VIEW.selected = todayKey();
+        renderMission();
+        break;
+      }
+      case "allow-pick": {
+        ensureAllowView();
+        var adk = btn.getAttribute("data-date");
+        if (isDateKey(adk)) ALLOW_VIEW.selected = adk;
+        renderMission();
+        break;
+      }
       case "open-routine": {
         switchTab("mission");
         var routineEl = qs("#eveningRoutine");

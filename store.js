@@ -155,6 +155,7 @@
       case "pet.ledger": return mergeBoolMap(base, local, remote);
       case "mission": return mergeMission(base, local, remote, ctx);
       case "study": return mergeStudy(base, local, remote, ctx);
+      case "routine": return mergeRoutine(base, local, remote, ctx);
       case "chat": return mergeChat(base, local, remote, ctx);
       case "deleted": return mergeTombstones(base, local, remote);
       case "quickPhrases.hidden": return mergeTagList(base, local, remote, ctx);
@@ -313,6 +314,80 @@
       if (out.indexOf(x) === -1) out.push(x);
     });
     if (!deepEqual(out, l)) ctx.remoteTouched = true;
+    return out;
+  }
+
+  // 저녁 루틴·용돈: 날짜별 적립 기록(days)과 사용 내역(spends)이 사라지지 않게 병합
+  //  · 그날 모은 돈(earned)은 줄지 않는다 (오늘 체크를 푼 경우만 이 기기 값이 내려간다)
+  //  · 체크는 항목별 3-way — 다른 기기의 체크가 살아나고, 풀은 체크는 풀린 채로
+  function mergeNum3(base, local, remote) {
+    var nb = numOr(base, 0), nl = numOr(local, 0), nr = numOr(remote, 0);
+    if (nl === nr) return nl;
+    if (nl === nb) return nr;
+    if (nr === nb) return nl;
+    return Math.max(nl, nr);
+  }
+
+  function mergeChecked(b, l, r, ctx) {
+    var out = {};
+    var ids = [];
+    [b, l, r].forEach(function (o) {
+      eachKeys(o, function (id) {
+        if (ids.indexOf(id) === -1) ids.push(id);
+      });
+    });
+    ids.forEach(function (id) {
+      var lb = !!(b && b[id]);
+      var ll = !!(l && l[id]);
+      var rr = !!(r && r[id]);
+      var v;
+      if (ll === rr) v = ll;
+      else if (ll === lb) v = rr;
+      else if (rr === lb) v = ll;
+      else v = ctx && ctx.preferLocal ? ll : rr;
+      if (v) out[id] = true;
+    });
+    return out;
+  }
+
+  function mergeRoutineDays(b, l, r, ctx) {
+    var out = {};
+    var keys = [];
+    [r && r.days, l && l.days, b && b.days].forEach(function (o) {
+      eachKeys(o, function (k) {
+        if (keys.indexOf(k) === -1) keys.push(k);
+      });
+    });
+    keys.forEach(function (k) {
+      var bd = isPlainObject(b && b.days && b.days[k]) ? b.days[k] : null;
+      var ld = isPlainObject(l && l.days && l.days[k]) ? l.days[k] : null;
+      var rd = isPlainObject(r && r.days && r.days[k]) ? r.days[k] : null;
+      if (!ld && !rd) return;                       // 양쪽 다 지운 날 → 지운 채로
+      if (!ld) { out[k] = cloneValue(rd); return; }  // 이 기기에만 없던 날 → 서버 기록 살린다
+      if (!rd) { out[k] = cloneValue(ld); return; }
+      var earned = Math.max(numOr(ld.earned, 0), numOr(rd.earned, 0));
+      var rec = { checked: mergeChecked(bd && bd.checked, ld.checked, rd.checked, ctx) };
+      if (earned > 0) rec.earned = earned;
+      if (ld.bonus || rd.bonus) rec.bonus = true;
+      out[k] = rec;
+    });
+    return out;
+  }
+
+  function mergeRoutine(base, local, remote, ctx) {
+    var b = isPlainObject(base) ? base : null;
+    var l = isPlainObject(local) ? local : null;
+    var r = isPlainObject(remote) ? remote : null;
+    if (!l) {
+      if (r && !deepEqual(r, b)) ctx.remoteTouched = true;
+      return r ? cloneValue(r) : undefined;
+    }
+    if (!r) return cloneValue(l);
+    var out = mergeObject("routine", b, l, r, ctx);
+    out.items = mergeList("routine.items", b && b.items, l.items || [], r.items || [], ctx);
+    out.days = mergeRoutineDays(b, l, r, ctx);
+    out.spends = mergeList("routine.spends", b && b.spends, l.spends || [], r.spends || [], ctx);
+    out.spent = mergeNum3(b && b.spent, l.spent, r.spent);
     return out;
   }
 
