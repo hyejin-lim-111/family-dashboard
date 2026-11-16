@@ -1613,8 +1613,9 @@ body.alarm-on { overflow: hidden; }
 .quick-edit-bar[hidden] { display: none; }
 .quick-edit-hint { flex: 1 1 auto; min-width: 0; font-size: 10.5px; color: #B0617F; line-height: 1.35; }
 .quick-edit-hint b { color: #C0567A; }
-.quick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 6px; max-height: 252px; overflow-y: auto; }
+.quick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 6px; max-height: 252px; overflow-y: auto; overflow-x: hidden; }
 .quick-grid[hidden] { display: none; }
+.quick-grid.is-editing { padding: 4px 4px 2px 2px; }
 .quick-cell { position: relative; display: flex; min-width: 0; }
 .quick-btn {
   flex: 1 1 auto; min-width: 0;
