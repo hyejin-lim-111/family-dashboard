@@ -776,10 +776,15 @@
       return fetchRemote().then(function (remote) {
         var toPush = local;
         if (remote && remote.payload) {
-          var res = mergedInto(local, remote.payload);
-          toPush = res.payload;
-          carry = res.remoteChanged;
-          basePayload = cloneValue(toPush);
+          try {
+            var res = mergedInto(local, remote.payload);
+            toPush = res.payload;
+            carry = res.remoteChanged;
+            basePayload = cloneValue(toPush);
+          } catch (e) {
+            // 병합이 실패해도 이 기기의 저장은 잃지 않는다 (예전처럼 그대로 올림)
+            toPush = local;
+          }
           if (remote.updatedAt) lastRemoteAt = remote.updatedAt;
         } else {
           basePayload = cloneValue(toPush);
@@ -811,8 +816,12 @@
             (!!local && tsOf(local) > String(remote.updatedAt || tsOf(remote.payload)));
           var res = null;
           if (local && useMerge) {
-            res = mergeStates(basePayload, local, remote.payload, mergeOptions());
-            merged = res.payload;
+            try {
+              res = mergeStates(basePayload, local, remote.payload, mergeOptions());
+              merged = res.payload;
+            } catch (e) {
+              merged = cloneValue(remote.payload);   // 병합이 실패하면 서버 상태로 시작
+            }
           } else {
             merged = cloneValue(remote.payload);
           }
@@ -849,9 +858,14 @@
       var merged;
       var changed = true;
       if (isPlainObject(local)) {
-        var res = mergedInto(local, remotePayload);
-        merged = res.payload;
-        changed = res.remoteChanged;
+        try {
+          var res = mergedInto(local, remotePayload);
+          merged = res.payload;
+          changed = res.remoteChanged;
+        } catch (e) {
+          // 병합이 실패하면 이 기기 화면은 그대로 두고, 다음 확인에서 다시 시도한다
+          return;
+        }
       } else {
         merged = remotePayload;
       }
