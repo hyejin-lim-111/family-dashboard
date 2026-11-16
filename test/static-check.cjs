@@ -126,6 +126,36 @@ console.log("\n[7] 홈 상단 1줄 3열 · 확대 타이머");
   check("알람이 확대 타이머를 대신함", /function onTabletFinish\(\)[\s\S]{0,400}closeModal\(\)/.test(app));
 }
 
+console.log("\n[8] 홈 4단 배치 (태블릿 2열 · 미니 달력)");
+{
+  const wide = css.slice(css.indexOf("@media (min-width: 720px)"));
+  const gridRule = (wide.match(/\.home-grid\s*\{[^}]*\}/) || [""])[0];
+  check("넓은 화면 2열 그리드", /grid-template-columns:\s*1[^;]*fr\s+[^;]*fr/.test(gridRule), gridRule.replace(/\s+/g, " "));
+  check("한 줄 안 카드 높이 맞춤", /\.home-grid > \.home-cell\s*\{[^}]*display:\s*grid/.test(wide));
+  check("좌우 카드가 같은 높이", /\.home-grid\s*\{[^}]*align-items:\s*stretch/.test(wide));
+  check("미니 달력 7열", /\.hcal-grid\s*\{[^}]*repeat\(7/.test(css));
+  check("미니 달력 오늘 강조", /\.hcal-cell\.is-today\s*\{/.test(css));
+  check("미니 달력 일정 점", /\.hcal-dot\s*\{/.test(css) && /\.hcal-dot\.who-dain\s*\{/.test(css) && /\.hcal-dot\.who-all\s*\{/.test(css));
+  check("미니 달력이 좁은 버튼 줄을 만들지 않음", /\.hcal-cell\s*\{[^}]*min-height/.test(css));
+
+  // 홈 그리드에 들어가는 순서: 1) 상단 3열 2) 달력 3) 날씨 4) 오늘 할 일 5) 체크리스트 6) 오늘 현황 7) 인사
+  const homeFn = app.slice(app.indexOf("function renderHome()"), app.indexOf("function renderStudy()"));
+  const order = [
+    "buildHomeTopRow()",
+    "homeCalendarCardHtml()",
+    'id="weatherCard"',
+    "오늘 할 일</div>",
+    "checklistSummaryHtml()",
+    "📌</span>오늘 현황",
+    "힘차게",
+  ];
+  const at = order.map((s) => homeFn.indexOf(s));
+  check("4단 순서대로 그려짐", at.every((v, i) => v >= 0 && (i === 0 || v > at[i - 1])), at.join(","));
+  check("미니 달력 카드는 2번째 줄 왼쪽", /home-cell-cal"\)/.test(homeFn) && /el\("div", "home-cell home-cell-cal"\)/.test(homeFn));
+  check("오늘 할 일·체크리스트가 3번째 줄", /home-cell-todo/.test(homeFn) && /home-cell-check/.test(homeFn));
+  check("인사 카드가 맨 아래", /grid\.appendChild\(greet\)/.test(homeFn) && !/insertBefore\(greet/.test(homeFn));
+}
+
 console.log("\n================================");
 if (failures) { console.log("FAILED: " + failures + " checks"); process.exit(1); }
 console.log("ALL STATIC CHECKS PASSED ✅");

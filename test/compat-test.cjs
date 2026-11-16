@@ -74,7 +74,9 @@ function boot(payload, label) {
     check("부팅 오류 없음", errors.length === 0, errors.join(" / "));
     check("기기 프로필 기억", $("#deviceGate").hidden === true);
     check("홈이 그려짐", $("#homeContent").textContent.includes("오늘 현황"));
-    check("도장 기록 유지(3개)", $$(".stat-num")[0].textContent.startsWith("3"), $$(".stat-num")[0].textContent);
+    const stampStat = $$("#homeContent .stat").find((s) => s.textContent.includes("모은 도장"));
+    check("도장 기록 유지(3개)", !!stampStat && stampStat.querySelector(".stat-num").textContent.startsWith("3"),
+      stampStat ? stampStat.textContent : "모은 도장 칸 없음");
 
     click($('.tab-btn[data-tab="mission"]'));
     check("할 일 기록 유지", $(".todo-item .txt").textContent === "유치원 가방 정리");

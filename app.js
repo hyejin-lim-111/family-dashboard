@@ -1250,13 +1250,18 @@
     var doneCount = items.filter(function (i) { return i.done; }).length;
     var todayStamps = Number(state.stamps[todayKey()] || 0);
 
-    // 오늘 할 일 요약
+    // 오늘 할 일 요약 (사람별 완료 수 + 아직 남은 할 일 몇 가지)
     var todoRows = [];
+    var leftTodoRows = [];
     ["dain", "mom", "dad"].forEach(function (pid) {
       var list = state.todos[pid] || [];
       var done = list.filter(function (t) { return t.done; }).length;
       todoRows.push({ who: pid, label: memberName(pid), done: done, total: list.length });
+      list.filter(function (t) { return !t.done; }).forEach(function (t) {
+        leftTodoRows.push({ who: memberName(pid), avatar: memberAvatar(pid), text: t.text });
+      });
     });
+    leftTodoRows = leftTodoRows.slice(0, 3);
 
     var mission = MISSION_POOL[state.mission.index % MISSION_POOL.length];
 
@@ -1265,16 +1270,44 @@
 
     var grid = qs(".home-grid", home);
 
-    // 맨 윗줄: ⏰ 시간 · 💰 용돈 현황 · ⏱️ 타이머 — 태블릿 넓은 화면에서는 3열 한 줄
+    // ── 1번째 줄: ⏰ 시간 · 💰 용돈 현황 · ⏱️ 타이머 — 태블릿 넓은 화면에서는 3열 한 줄
     grid.appendChild(buildHomeTopRow());
 
-    // 날씨 카드
-    var wWrap = el("div");
+    // ── 2번째 줄: 왼쪽 📅 일정 · 달력 / 오른쪽 🌤️ 성남시 분당구 날씨
+    var calWrap = el("div", "home-cell home-cell-cal");
+    calWrap.innerHTML = homeCalendarCardHtml();
+    grid.appendChild(calWrap);
+
+    var wWrap = el("div", "home-cell home-cell-weather");
     wWrap.innerHTML = '<div class="card weather" id="weatherCard"></div>';
     grid.appendChild(wWrap);
 
-    // 오늘 요약
-    var sumWrap = el("div");
+    // ── 3번째 줄: 왼쪽 🗒️ 오늘 할 일 / 오른쪽 ✅ 함께 체크리스트
+    var todoSnap = el("div", "home-cell home-cell-todo");
+    todoSnap.innerHTML =
+      '<div class="card tight">' +
+        '<div class="section-head"><div class="section-title"><span class="ico">🗒️</span>오늘 할 일</div>' +
+          '<button class="btn btn-xs btn-ghost" type="button" data-action="tab" data-tab="mission">전체 보기</button></div>' +
+        '<div class="stat-grid" style="margin-top:10px">' +
+          todoRows.map(function (r) {
+            return '<div class="stat"><div class="stat-num">' + (r.total ? r.done + '/' + r.total : '-') + '</div><div class="stat-label">' + esc(r.label) + '</div></div>';
+          }).join("") +
+        '</div>' +
+        '<div class="mini-list" style="margin-top:10px">' +
+          (leftTodoRows.length ? leftTodoRows.map(function (t) {
+            return '<div class="mini-row"><img class="mini-avatar" src="' + esc(t.avatar) + '" alt="">' +
+              '<span class="txt"><b class="up-date">' + esc(t.who) + '</b> ' + esc(t.text) + '</span></div>';
+          }).join("") : '<div class="mini-row"><span class="check">🌿</span><span class="txt">오늘 할 일을 모두 마쳤어요 — 멋져요!</span></div>') +
+        '</div>' +
+      '</div>';
+    grid.appendChild(todoSnap);
+
+    var chkWrap = el("div", "home-cell home-cell-check");
+    chkWrap.innerHTML = checklistSummaryHtml();
+    grid.appendChild(chkWrap);
+
+    // ── 4번째 줄 이후: 📌 오늘 현황 + 인사 카드 (나머지)
+    var sumWrap = el("div", "span-2 home-cell-today");
     sumWrap.innerHTML =
       '<div class="card">' +
         '<div class="section-head"><div class="section-title"><span class="ico">📌</span>오늘 현황</div>' +
@@ -1299,39 +1332,16 @@
       '</div>';
     grid.appendChild(sumWrap);
 
-    // 오늘 할 일 스냅샷
-    var todoSnap = el("div", "span-2");
-    todoSnap.innerHTML =
-      '<div class="card tight">' +
-        '<div class="section-head"><div class="section-title"><span class="ico">🗒️</span>오늘 할 일 한눈에</div>' +
-          '<button class="btn btn-xs btn-ghost" type="button" data-action="tab" data-tab="mission">전체 보기</button></div>' +
-        '<div class="stat-grid" style="margin-top:10px">' +
-          todoRows.map(function (r) {
-            return '<div class="stat"><div class="stat-num">' + (r.total ? r.done + '/' + r.total : '-') + '</div><div class="stat-label">' + esc(r.label) + '</div></div>';
-          }).join("") +
-        '</div>' +
-      '</div>';
-    grid.appendChild(todoSnap);
-
-    // 다가오는 일정 + 함께 체크리스트 요약
-    var upWrap = el("div");
-    upWrap.innerHTML = upcomingCardHtml();
-    grid.appendChild(upWrap);
-
-    var chkWrap = el("div");
-    chkWrap.innerHTML = checklistSummaryHtml();
-    grid.appendChild(chkWrap);
-
-    // 히어로 인사말 (상단)
+    // 인사 카드 — 맨 아래 나머지 줄
     var me = memberById(meId);
-    var greet = el("div");
+    var greet = el("div", "span-2 home-cell-greet");
     greet.innerHTML =
       '<div class="card tight" style="display:flex;align-items:center;gap:12px">' +
         '<img src="' + esc(me ? avatarOf(me) : "assets/avatar_daini.png") + '" alt="" style="width:52px;height:52px;border-radius:50%;object-fit:cover;border:2px solid #fff;box-shadow:var(--shadow-tiny)">' +
         '<div class="grow"><p class="title-font" style="font-size:16px">' + esc(me ? me.name : "") + '의 하루, 힘차게! ✨</p>' +
         '<p class="muted">공부하고 도장 모아서 요정 친구들을 만나요</p></div>' +
       '</div>';
-    grid.insertBefore(greet, wWrap);
+    grid.appendChild(greet);
 
     renderHomeWeather();
     fetchWeather(false);
@@ -2132,24 +2142,74 @@
   }
 
   /* ---------- 홈 요약 카드 ---------- */
-  function upcomingCardHtml() {
+
+  // 홈 2번째 줄 왼쪽: 이번 달 미니 달력(오늘 강조 + 일정 점) + 다가오는 일정 목록
+  // 달력의 날짜를 누르면 그 날짜를 골라 '함께 → 가족 달력'으로 이동한다.
+  function homeCalendarCardHtml() {
     var today = todayKey();
-    var list = allEvents().filter(function (e) { return e.date >= today; }).sort(function (a, b) {
+    var p = splitKey(today);
+
+    // 이번 달 마지막 주까지만 남겨 6주 → 보통 5주로 줄인다
+    var cells = monthCells(p.y, p.m);
+    while (cells.length > 7 && cells.slice(-7).every(function (c) { return !c.inMonth; })) {
+      cells = cells.slice(0, -7);
+    }
+
+    var byDay = {};
+    allEvents().forEach(function (e) {
+      if (!byDay[e.date]) byDay[e.date] = [];
+      byDay[e.date].push(e);
+    });
+
+    var monthCount = allEvents().filter(function (e) {
+      var q = splitKey(e.date);
+      return q.y === p.y && q.m === p.m;
+    }).length;
+
+    var cellHtml = cells.map(function (c) {
+      var evs = byDay[c.key] || [];
+      var dots = evs.slice(0, 3).map(function (e) {
+        return '<i class="hcal-dot who-' + esc(e.who || "all") + '"></i>';
+      }).join("");
+      var cls = "hcal-cell" + (c.inMonth ? "" : " is-out") +
+        (c.key === today ? " is-today" : "") + (evs.length ? " has-events" : "");
+      return '<button class="' + cls + '" type="button" data-action="home-cal-day" data-date="' + esc(c.key) + '"' +
+        ' aria-label="' + esc(fmtDayLabel(c.key) + (evs.length ? " · 일정 " + evs.length + "개" : "")) + '">' +
+        '<span class="hcal-num">' + c.day + '</span>' +
+        '<span class="hcal-dots">' + dots + '</span>' +
+      '</button>';
+    }).join("");
+
+    var upcoming = allEvents().filter(function (e) { return e.date >= today; }).sort(function (a, b) {
       if (a.date !== b.date) return a.date < b.date ? -1 : 1;
       return cmpEvent(a, b);
     }).slice(0, 3);
 
-    return '<div class="card tight">' +
-      '<div class="section-head"><div class="section-title"><span class="ico">🗓️</span>다가오는 일정</div>' +
+    var upRows = upcoming.map(function (e) {
+      var q = splitKey(e.date);
+      var w = whoInfo(e.who);
+      return '<div class="mini-row"><span class="check">' + w.emoji + '</span>' +
+        '<span class="txt"><b class="up-date">' + (q.m + 1) + '/' + q.d + '(' + DOW_KO[dowOfKey(e.date)] + ')</b> ' + esc(e.title) + '</span></div>';
+    }).join("") || '<div class="mini-row"><span class="check">🌿</span><span class="txt">아직 넣은 일정이 없어요 — 가족과 함께 넣어 봐요</span></div>';
+
+    return '<div class="card tight home-cal">' +
+      '<div class="section-head"><div class="section-title"><span class="ico">📅</span>일정 · 달력</div>' +
         '<button class="btn btn-xs btn-ghost" type="button" data-action="tab" data-tab="together" data-sub="calendar">달력 열기</button></div>' +
-      '<div class="mini-list" style="margin-top:10px">' +
-        (list.length ? list.map(function (e) {
-          var p = splitKey(e.date);
-          var w = whoInfo(e.who);
-          return '<div class="mini-row"><span class="check">' + w.emoji + '</span>' +
-            '<span class="txt"><b class="up-date">' + (p.m + 1) + '/' + p.d + '(' + DOW_KO[dowOfKey(e.date)] + ')</b> ' + esc(e.title) + '</span></div>';
-        }).join("") : '<div class="mini-row"><span class="check">🌿</span><span class="txt">아직 넣은 일정이 없어요 — 가족과 함께 넣어 봐요</span></div>') +
-      '</div></div>';
+      '<div class="hcal-head"><b id="hcalMonth">' + (p.m + 1) + '월</b>' +
+        '<span>' + p.y + '년 · 일정 ' + monthCount + '개</span></div>' +
+      '<div class="hcal-dow">' + DOW_KO.map(function (d, i) {
+        return '<span class="' + (i === 0 ? "sun" : i === 6 ? "sat" : "") + '">' + d + '</span>';
+      }).join("") + '</div>' +
+      '<div class="hcal-grid" id="homeCalGrid">' + cellHtml + '</div>' +
+      '<div class="hcal-legend">' +
+        '<span><i class="hcal-dot who-all"></i>가족</span>' +
+        '<span><i class="hcal-dot who-dain"></i>다인이</span>' +
+        '<span><i class="hcal-dot who-mom"></i>엄마</span>' +
+        '<span><i class="hcal-dot who-dad"></i>아빠</span>' +
+      '</div>' +
+      '<p class="hcal-up-title">다가오는 일정</p>' +
+      '<div class="mini-list hcal-up">' + upRows + '</div>' +
+    '</div>';
   }
 
   function checklistSummaryHtml() {
@@ -2516,6 +2576,20 @@
 
     switch (act) {
       case "tab": switchTab(btn.getAttribute("data-tab"), btn.getAttribute("data-sub")); break;
+
+      /* 홈 미니 달력 — 고른 날짜로 가족 달력을 연다 */
+      case "home-cal-day": {
+        var hcalKey = btn.getAttribute("data-date");
+        if (isDateKey(hcalKey)) {
+          ensureCalView();
+          var hcalParts = splitKey(hcalKey);
+          calView.y = hcalParts.y;
+          calView.m = hcalParts.m;
+          calView.selected = hcalKey;
+        }
+        switchTab("together", "calendar");
+        break;
+      }
 
       /* weather */
       case "refresh-weather": fetchWeather(true); toast("날씨를 새로 받아왔어요", "🌦️"); break;
