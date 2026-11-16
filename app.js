@@ -959,7 +959,7 @@
   /* =========================================================
      홈 — 큰 시계 + 태블릿 끄기 타이머
      ========================================================= */
-  var tabletTimer = { total: 0, remaining: 0, running: false, endAt: 0, intId: null, ringing: false, presetMin: 0 };
+  var tabletTimer = { total: 0, remaining: 0, running: false, started: false, endAt: 0, intId: null, ringing: false, presetMin: 0 };
   var audioCtx = null;
 
   function setTextById(id, text) {
@@ -1011,9 +1011,16 @@
     } catch (e) { /* 소리는 선택 */ }
   }
 
+  function tabletToggleLabel() {
+    if (tabletTimer.running) return "⏸ 일시정지";
+    if (tabletTimer.started && tabletTimer.remaining > 0) return "▶ 이어서";
+    return "▶ 시작";
+  }
+
   function tabletTimerSubText() {
     if (tabletTimer.ringing) return "알람이 울리는 중이에요";
     if (tabletTimer.running) return "태블릿을 끌 준비를 해요…";
+    if (tabletTimer.started && tabletTimer.remaining > 0) return "잠깐 멈췄어요 — 이어서 눌러요";
     if (tabletTimer.remaining > 0) return "준비됐어요 — 시작을 눌러요";
     return "10 · 20 · 30 · 60분 또는 직접 입력";
   }
@@ -1026,10 +1033,7 @@
     }
     setTextById("tabTimerSub", tabletTimerSubText());
     var toggle = qs("#tabTimerToggle");
-    if (toggle) {
-      toggle.textContent = tabletTimer.running ? "⏸ 일시정지"
-        : (tabletTimer.remaining > 0 ? "▶ 이어서" : "▶ 시작");
-    }
+    if (toggle) toggle.textContent = tabletToggleLabel();
     qsa(".tbl-preset").forEach(function (b) {
       var on = !tabletTimer.running && tabletTimer.remaining > 0 &&
         Number(b.getAttribute("data-min")) * 60 === tabletTimer.remaining;
@@ -1060,6 +1064,7 @@
     if (tabletTimer.running) return;
     if (tabletTimer.remaining <= 0) { toast("먼저 시간을 골라 주세요", "⏰"); return; }
     tabletTimer.ringing = false;
+    tabletTimer.started = true;
     tabletTimer.endAt = Date.now() + tabletTimer.remaining * 1000;
     tabletTimer.running = true;
     ensureAudio();          // 사용자가 누를 때 미리 준비해 둬야 알람음이 나와요
@@ -1079,6 +1084,7 @@
     stopTabletInt();
     tabletTimer.running = false;
     tabletTimer.ringing = false;
+    tabletTimer.started = false;
     tabletTimer.remaining = 0;
     tabletTimer.total = 0;
     tableTimerHideAlarm();
@@ -1092,6 +1098,7 @@
     tabletTimer.total = m * 60;
     tabletTimer.presetMin = m;
     tabletTimer.ringing = false;
+    tabletTimer.started = false;
     tableTimerHideAlarm();
     paintTabletTimer();
   }
@@ -1123,6 +1130,7 @@
   function dismissAlarm() {
     tableTimerHideAlarm();
     tabletTimer.ringing = false;
+    tabletTimer.started = false;
     tabletTimer.remaining = 0;
     tabletTimer.total = 0;
     renderHome();
@@ -1155,7 +1163,7 @@
           '</div>' +
           '<div class="tbl-btns">' +
             '<button class="btn btn-purple" type="button" data-action="tab-timer-toggle" id="tabTimerToggle">' +
-              (tabletTimer.running ? "⏸ 일시정지" : (tabletTimer.remaining > 0 ? "▶ 이어서" : "▶ 시작")) + '</button>' +
+              tabletToggleLabel() + '</button>' +
             '<button class="btn btn-ghost" type="button" data-action="tab-timer-reset">↺ 초기화</button>' +
           '</div>' +
         '</div>' +

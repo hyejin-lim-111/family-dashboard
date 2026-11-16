@@ -300,6 +300,7 @@ function legacyPayload() {
     await sleep(120);
     check("20분 선택 → 20:00", t.$("#tabTimerFace").textContent === "20:00", t.$("#tabTimerFace").textContent);
     check("선택된 프리셋 표시", !!t.$('.tbl-preset[data-min="20"].is-active'));
+    check("아직 시작 전이면 '시작' 버튼", t.$("#tabTimerToggle").textContent.includes("시작") && !t.$("#tabTimerToggle").textContent.includes("이어서"), t.$("#tabTimerToggle").textContent);
 
     t.click(t.$('[data-action="tab-timer-toggle"]'));
     await sleep(120);
@@ -308,6 +309,7 @@ function legacyPayload() {
     t.click(t.$('[data-action="tab-timer-toggle"]'));
     await sleep(120);
     check("일시정지 반영", t.$("#tabTimerToggle").textContent.includes("이어서"), t.$("#tabTimerToggle").textContent);
+    check("일시정지 안내 문구", t.$("#tabTimerSub").textContent.includes("멈췄어요"), t.$("#tabTimerSub").textContent);
 
     t.click(t.$('[data-action="tab-timer-reset"]'));
     await sleep(120);
