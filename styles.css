@@ -1955,3 +1955,431 @@ body.alarm-on { overflow: hidden; }
   .gc-headline { font-size: 11px; }
   .msg-photo { max-width: 170px; max-height: 220px; }
 }
+/* =========================================================
+   2026-11-16 추가: 🐣 내 캐릭터 키우기 (도감 탭 자리)
+   레벨업 · 돌보기 · 올클리어 간식 · 성장 단계
+   ========================================================= */
+
+.pet-hero-card {
+  position: relative;
+  overflow: hidden;
+  border-color: #FFE0EC;
+  background:
+    radial-gradient(120% 90% at 50% 0%, #FFF2F8 0%, rgba(255, 242, 248, 0) 58%),
+    linear-gradient(180deg, #FFFDFB 0%, #FFF7F1 100%);
+}
+
+.pet-scene {
+  position: relative;
+  height: 218px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  border-radius: 22px;
+  background: radial-gradient(64% 52% at 50% 88%, #FFE3EF 0%, rgba(255, 227, 239, 0) 72%);
+  overflow: hidden;
+}
+
+.pet-img {
+  position: relative;
+  z-index: 2;
+  width: auto;
+  max-width: 82%;
+  object-fit: contain;
+  filter: drop-shadow(0 12px 18px rgba(214, 150, 180, 0.22));
+  transition: height 0.45s cubic-bezier(0.22, 0.8, 0.3, 1);
+}
+
+@keyframes petJump {
+  0%, 100% { transform: translateY(0) scale(1); }
+  26% { transform: translateY(-16px) scale(1.02); }
+  52% { transform: translateY(0) scale(0.99); }
+  72% { transform: translateY(-7px) scale(1.01); }
+}
+.pet-img.is-jump { animation: petJump 0.95s ease both; }
+
+@keyframes petSparkle {
+  0% { filter: drop-shadow(0 12px 18px rgba(214, 150, 180, 0.22)); }
+  45% { filter: drop-shadow(0 0 22px rgba(255, 214, 120, 0.95)); }
+  100% { filter: drop-shadow(0 12px 18px rgba(214, 150, 180, 0.22)); }
+}
+.pet-img.is-sparkle { animation: petSparkle 1.15s ease both; }
+
+@keyframes petShake {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-3.2deg); }
+  55% { transform: rotate(3.2deg); }
+  80% { transform: rotate(-1.4deg); }
+}
+.pet-img.is-shake { animation: petShake 0.6s ease both; }
+
+.pet-lv-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 3;
+  padding: 3px 11px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1.5px solid #FFD3E2;
+  color: #C2557C;
+  font-family: var(--font-num);
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: var(--shadow-tiny);
+}
+
+.pet-newlook-ribbon {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 3;
+  padding: 3px 11px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #F58FB2, #A98BE8);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  box-shadow: 0 4px 12px rgba(169, 139, 232, 0.4);
+  animation: popIn 0.4s ease both;
+}
+
+.pet-spark {
+  position: absolute;
+  z-index: 1;
+  font-size: 13px;
+  opacity: 0.9;
+  animation: petSparkFloat 3.6s ease-in-out infinite;
+}
+.pet-spark.ps-1 { left: 10%; top: 22%; animation-delay: 0s; }
+.pet-spark.ps-2 { right: 12%; top: 16%; font-size: 11px; animation-delay: 0.9s; }
+.pet-spark.ps-3 { left: 20%; bottom: 16%; font-size: 12px; animation-delay: 1.7s; }
+.pet-spark.ps-4 { right: 18%; bottom: 26%; font-size: 10px; animation-delay: 2.4s; }
+.pet-spark.ps-5 { left: 46%; top: 6%; font-size: 10px; animation-delay: 3s; }
+
+@keyframes petSparkFloat {
+  0%, 100% { transform: translateY(0) scale(1); opacity: 0.55; }
+  50% { transform: translateY(-7px) scale(1.15); opacity: 1; }
+}
+
+.pet-bubble {
+  position: absolute;
+  top: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4;
+  max-width: 78%;
+  padding: 6px 12px;
+  border-radius: 15px;
+  background: #fff;
+  border: 2px solid #FFD9E6;
+  color: #A24B6C;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+  box-shadow: var(--shadow-tiny);
+  animation: popIn 0.28s ease both;
+}
+.pet-bubble::after {
+  content: "";
+  position: absolute;
+  bottom: -7px;
+  left: 50%;
+  margin-left: -5px;
+  width: 9px;
+  height: 9px;
+  background: #fff;
+  border-right: 2px solid #FFD9E6;
+  border-bottom: 2px solid #FFD9E6;
+  transform: rotate(45deg);
+}
+
+.pet-friends {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  z-index: 3;
+  display: flex;
+  gap: 3px;
+}
+.pet-friends img {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #fff;
+  border: 1.5px solid #FFE0EC;
+  box-shadow: var(--shadow-tiny);
+}
+
+.pet-id { margin-top: 12px; text-align: center; }
+.pet-name {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-family: var(--font-title);
+  font-size: 20px;
+  font-weight: 700;
+  color: #4A3B34;
+  letter-spacing: -0.3px;
+}
+.pet-name .mini-icon { font-size: 11px; }
+.pet-stage-line { margin-top: 2px; font-size: 12px; color: var(--ink-faint); }
+.pet-stage-line b { color: #C2557C; }
+
+.pet-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.pet-chip {
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: #FFF6EC;
+  border: 1px solid #F3E2D1;
+  color: #8A6A55;
+  font-size: 11px;
+}
+.pet-chip.is-next { background: #FFF2F7; border-color: #FAD3E2; color: #C2557C; font-weight: 700; }
+
+/* 돌보기 */
+
+.pet-care-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+.pet-care-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 12px 6px 10px;
+  border-radius: 18px;
+  border: 1.5px solid #F3DCE7;
+  background: linear-gradient(180deg, #FFFDFE, #FFF4F9);
+  box-shadow: var(--shadow-tiny);
+  transition: transform 0.14s ease, box-shadow 0.14s ease;
+}
+.pet-care-btn:not(:disabled):active { transform: translateY(2px) scale(0.97); box-shadow: none; }
+.pet-care-btn.is-full { opacity: 0.55; }
+.pc-ico { font-size: 26px; line-height: 1.1; }
+.pc-label { font-size: 12.5px; font-weight: 700; color: #7C4C63; }
+.pc-left { font-size: 10px; color: var(--ink-faint); }
+
+.pet-gauges {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed #F0E1D6;
+}
+.pet-gauge {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr) 30px;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+}
+.pg-label { font-weight: 600; }
+.pg-bar { height: 9px; border-radius: 999px; background: #F4E9DF; overflow: hidden; }
+.pg-bar > i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #FFC2D6, #F58FB2);
+  transition: width 0.45s cubic-bezier(0.22, 0.8, 0.3, 1);
+}
+.pet-gauge:nth-child(2) .pg-bar > i { background: linear-gradient(90deg, #FFE39A, #F7C948); }
+.pet-gauge:nth-child(3) .pg-bar > i { background: linear-gradient(90deg, #D8C4FF, #A98BE8); }
+.pg-num { font-family: var(--font-num); font-size: 12px; font-weight: 700; color: #C2557C; text-align: right; }
+
+/* 오늘 할 일 = 경험치 */
+
+.pet-quest-list { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+.pet-quest {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto auto 14px;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  background: #FFFCF9;
+  border: 1.5px solid #F6EBE1;
+}
+.pet-quest.is-done { background: #F5FBF6; border-color: #D9EEDF; }
+.pq-ico { font-size: 15px; }
+.pq-body { display: flex; flex-direction: column; min-width: 0; }
+.pq-label { font-size: 12.5px; font-weight: 700; color: var(--ink); }
+.pq-bar { display: block; height: 5px; margin-top: 4px; border-radius: 999px; background: #F1E6DC; overflow: hidden; }
+.pq-bar > i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #BFE3F9, #6FB3E0);
+  transition: width 0.45s ease;
+}
+.pet-quest.is-done .pq-bar > i { background: linear-gradient(90deg, #9FDDAD, #4FA96B); }
+.pq-count { font-family: var(--font-num); font-size: 11.5px; color: var(--ink-soft); white-space: nowrap; }
+.pq-xp {
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #FFF2F6;
+  color: #C2557C;
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+.pq-check { color: var(--good); font-size: 13px; font-weight: 800; text-align: center; }
+
+.pet-bonus {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 18px;
+  border: 1.5px dashed #F2DCAE;
+  background: linear-gradient(180deg, #FFFDF8, #FFF7E6);
+  text-align: center;
+}
+.pet-bonus.is-on {
+  border-style: solid;
+  border-color: #F2C94C;
+  background: linear-gradient(180deg, #FFFDF4, #FFF2CF);
+  box-shadow: 0 6px 18px rgba(247, 201, 72, 0.28);
+  animation: bonusGlow 2.4s ease-in-out infinite;
+}
+.pet-bonus.is-claimed { border-color: #D6EFDD; background: #F7FBF8; animation: none; }
+@keyframes bonusGlow {
+  0%, 100% { box-shadow: 0 6px 18px rgba(247, 201, 72, 0.24); }
+  50% { box-shadow: 0 8px 24px rgba(247, 201, 72, 0.46); }
+}
+.pb-title { font-size: 13px; font-weight: 800; color: #94662A; }
+.pb-sub { margin: 3px 0 10px; font-size: 11.5px; color: var(--ink-faint); }
+.pet-bonus .btn { font-size: 13px; }
+
+/* 성장 단계 */
+
+.pet-stage-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+.pet-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 6px 7px;
+  border-radius: 16px;
+  border: 1.5px solid #F3E4D7;
+  background: #FFFCF8;
+  transition: transform 0.14s ease;
+}
+.pet-stage:active { transform: scale(0.97); }
+.pet-stage.is-now {
+  border-color: #F8BFD3;
+  background: #FFF4F8;
+  box-shadow: 0 6px 16px rgba(245, 143, 178, 0.22);
+}
+.pet-stage.is-locked { opacity: 0.8; }
+.ps-thumb {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 12px;
+  overflow: hidden;
+  background: linear-gradient(180deg, #FFF9F3, #FFF1E6);
+}
+.ps-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.pet-stage.is-locked .ps-thumb img { filter: grayscale(1) brightness(1.05); opacity: 0.45; }
+.ps-lock {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  color: #B9A692;
+}
+.ps-lv { font-family: var(--font-num); font-size: 10.5px; font-weight: 700; color: #C2557C; }
+.ps-name { font-size: 11px; font-weight: 700; color: #6B5449; }
+
+.pet-hint { margin-top: 10px; font-size: 11.5px; color: var(--ink-faint); text-align: center; }
+.pet-modal-img { width: 150px; height: 150px; object-fit: contain; margin: 0 auto 6px; }
+
+/* 홈 — 내 캐릭터 미니 카드 */
+.home-greet-card { display: flex; align-items: center; gap: 12px; }
+.hg-avatar {
+  flex: 0 0 auto;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #fff;
+  box-shadow: var(--shadow-tiny);
+}
+.home-pet {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px 5px 5px;
+  border-radius: 16px;
+  border: 1.5px solid #FFDCE8;
+  background: #FFF4F8;
+  box-shadow: var(--shadow-tiny);
+}
+.home-pet:active { transform: scale(0.98); }
+.home-pet img {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #FFF7F1;
+}
+.hp-txt { display: flex; flex-direction: column; line-height: 1.18; text-align: left; }
+.hp-txt b { font-family: var(--font-num); font-size: 13px; color: #C2557C; }
+.hp-txt span { font-size: 10.5px; color: var(--ink-faint); }
+
+@media (max-width: 380px) {
+  .pet-scene { height: 186px; }
+  .pet-bubble { font-size: 11px; padding: 5px 10px; }
+  .pet-name { font-size: 18px; }
+  .pc-ico { font-size: 22px; }
+  .pc-label { font-size: 11.5px; }
+  .pet-quest { grid-template-columns: 20px minmax(0, 1fr) auto 12px; }
+  .pet-quest .pq-xp { display: none; }
+  .home-pet img { width: 34px; height: 34px; }
+  .hp-txt span { display: none; }
+}
+
+@media (min-width: 720px) {
+  /* 넓은 화면: 왼쪽에 캐릭터, 오른쪽에 돌보기·할 일, 아래에 성장 단계 */
+  #petContent {
+    display: grid;
+    grid-template-columns: minmax(0, 1.02fr) minmax(0, 0.98fr);
+    gap: 14px;
+    align-items: start;
+  }
+  #petHero { grid-row: 1 / span 2; margin: 0; }
+  #petCareCard, #petQuestCard { margin: 0; }
+  #petStageCard, #petStampCard { grid-column: 1 / -1; margin: 0; }
+
+  .pet-scene { height: 330px; }
+  .pet-name { font-size: 23px; }
+  .pet-bubble { font-size: 13px; top: 46px; }
+  .pet-stage-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .pet-stage { padding: 9px 7px 8px; }
+  .ps-name { font-size: 11.5px; }
+  .pet-care-btn { padding: 16px 8px 13px; }
+  .pc-ico { font-size: 32px; }
+  .pc-label { font-size: 14px; }
+  .pc-left { font-size: 11px; }
+  .pet-gauge { grid-template-columns: 86px minmax(0, 1fr) 34px; font-size: 12.5px; }
+  .pet-quest { padding: 10px 12px; }
+  .pq-label { font-size: 13.5px; }
+  .pet-bonus { padding: 14px; }
+  .pb-title { font-size: 14px; }
+  .home-pet img { width: 46px; height: 46px; }
+  .hp-txt b { font-size: 15px; }
+  .hp-txt span { font-size: 11.5px; }
+}

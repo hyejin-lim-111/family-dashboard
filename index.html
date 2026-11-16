@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#FFF8F0">
-<meta name="description" content="다인이와 엄마, 아빠가 함께 쓰는 따뜻한 가족 기록장 — 가족 달력, 함께 체크리스트, 오늘의 공부, 도장판과 요정 도감, 가족 미션, 할 일, 채팅.">
+<meta name="description" content="다인이와 엄마, 아빠가 함께 쓰는 따뜻한 가족 기록장 — 가족 달력, 함께 체크리스트, 오늘의 공부, 도장판, 내 캐릭터 키우기, 가족 미션, 할 일, 채팅.">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="우리 가족 기록장">
 <title>우리 가족 기록장</title>
@@ -70,9 +70,9 @@
       <div class="stack" id="studyContent"></div>
     </section>
 
-    <!-- 도장판 + 도감 -->
-    <section class="view" id="view-dex" data-view="dex" aria-label="도장판과 요정 도감">
-      <div class="stack" id="dexContent"></div>
+    <!-- 🐣 내 캐릭터 키우기 (레벨업 + 돌보기) -->
+    <section class="view" id="view-pet" data-view="pet" aria-label="내 캐릭터 키우기">
+      <div class="stack" id="petContent"></div>
     </section>
 
     <!-- 미션 / 할 일 -->
@@ -140,8 +140,9 @@
     <button class="tab-btn" type="button" role="tab" data-action="tab" data-tab="study" aria-selected="false">
       <span class="tab-ico">📖</span><span>공부</span>
     </button>
-    <button class="tab-btn" type="button" role="tab" data-action="tab" data-tab="dex" aria-selected="false">
-      <span class="tab-ico">🧚</span><span>도감</span>
+    <button class="tab-btn" type="button" role="tab" data-action="tab" data-tab="pet" aria-selected="false">
+      <span class="tab-ico">🐣</span><span>키우기</span>
+      <span class="tab-badge" id="petBadge" hidden>!</span>
     </button>
     <button class="tab-btn" type="button" role="tab" data-action="tab" data-tab="mission" aria-selected="false">
       <span class="tab-ico">🌈</span><span>미션</span>

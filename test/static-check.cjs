@@ -173,6 +173,25 @@ console.log("\n[9] 2026-11-16 추가 (말판 · 사진 · 성장도표 · 태어
   check("홈 태어난 지 배너", /bornDays\(/.test(app) && /homeBornBannerHtml/.test(app));
 }
 
+console.log("\n[10] 🐣 내 캐릭터 키우기 (도감 탭 교체)");
+{
+  check("도감 탭이 키우기 탭으로 바뀜", !/data-tab="dex"/.test(html) && /data-tab="pet"/.test(html) && /id="view-pet"/.test(html));
+  check("탭 이름·아이콘", /data-tab="pet"[\s\S]{0,120}🐣<\/span><span>키우기/.test(html));
+  check("레벨 배지 자리", /id="petBadge"/.test(html));
+  check("단계별 그림 6장 파일 존재", [1, 2, 3, 4, 5, 6].every((n) => fs.existsSync(path.join(ROOT, "assets/pet_stage" + n + ".png"))));
+  check("성장 단계 정의 6단계", /var PET_STAGES = \[/.test(app) && (app.match(/pet_stage\d\.png/g) || []).length === 6);
+  check("용돈 연동 경험치(100원당 1)", /PET_MONEY_PER_XP = 100/.test(app) && /function petMoneyXp\(\)/.test(app));
+  check("레벨업 판정", /function petInfo\(\)/.test(app) && /function petCheckLevel\(\)/.test(app));
+  check("돌보기 3종(밥·놀기·쓰다듬기)", /var PET_CARE = \{/.test(app) && /label: "밥 주기"/.test(app) && /label: "놀아주기"/.test(app) && /label: "쓰다듬기"/.test(app));
+  check("게이지 3종(포만감·기분·친밀도)", /포만감/.test(app) && /친밀도/.test(app) && /function renderPet\(\)/.test(app));
+  check("올클리어 간식", /function petClaimBonus\(\)/.test(app) && /올클리어/.test(app));
+  check("state.pet 저장·정규화", /pet: normalizePet\(null\)/.test(app) && /out\.pet = normalizePet\(out\.pet\)/.test(app) && /"pet", "settings"/.test(app));
+  check("홈 미니 카드", /class="home-pet"/.test(app) && /class="hg-avatar"/.test(app));
+  check("키우기 탭 스타일", /\.pet-hero-card\s*\{/.test(css) && /\.pet-care-btn\s*\{/.test(css) && /\.pet-quest\s*\{/.test(css) && /\.pet-stage\s*\{/.test(css) && /\.home-pet\s*\{/.test(css));
+  check("단계별 반응 애니메이션", /@keyframes petJump/.test(css) && /@keyframes petSparkle/.test(css));
+  check("태블릿 2열 배치", /#petContent\s*\{[^}]*grid-template-columns/.test(css) && /#petStageCard, #petStampCard/.test(css));
+}
+
 console.log("\n================================");
 if (failures) { console.log("FAILED: " + failures + " checks"); process.exit(1); }
 console.log("ALL STATIC CHECKS PASSED ✅");

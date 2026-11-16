@@ -159,26 +159,27 @@ function check(name, cond, extra) {
   check("할 일 완료 → 도장 총 3개", Object.values(st4.stamps).reduce((a, b) => a + b, 0) === 3);
   check("할 일 체크 UI", !!$(".todo-item.done"));
 
-  console.log("\n[7] 도감 탭");
-  click($('.tab-btn[data-tab="dex"]'));
-  check("도감 탭 활성", active() === "dex");
-  check("도감 카드 8장", $$(".dex-card").length === 8, "got " + $$(".dex-card").length);
-  check("해금 수 = 도장 3개 구간 (별별+꽃송이)", $$(".dex-card:not(.is-locked)").length === 2, "got " + $$(".dex-card:not(.is-locked)").length);
-  check("도장판 7칸", $$(".stamp-day").length === 7);
+  console.log("\n[7] 🐣 키우기 탭");
+  click($('.tab-btn[data-tab="pet"]'));
+  await sleep(150);
+  check("키우기 탭 활성", active() === "pet");
+  check("하단 탭 7개 유지", $$(".tab-btn").length === 7, "got " + $$(".tab-btn").length);
+  check("내 캐릭터가 보임", !!$("#petHero") && !!$("#petImg"));
+  check("처음은 Lv.1 알 단계", $(".pet-stage-line").textContent.includes("Lv.1 알"), $(".pet-stage-line").textContent);
+  check("단계 그림 6장", $$(".pet-stage").length === 6, "got " + $$(".pet-stage").length);
+  check("돌보기 버튼 3개", $$(".pet-care-btn").length === 3, "got " + $$(".pet-care-btn").length);
+  check("게이지 3개(포만감·기분·친밀도)", $$(".pet-gauge").length === 3);
+  check("오늘 할 일 = 경험치 4줄", $$(".pet-quest").length === 4, "got " + $$(".pet-quest").length);
+  check("올클리어 간식 상자", !!$("#petBonusBox"));
+  check("도장판 7칸은 키우기 탭에 남아 있음", $$(".stamp-day").length === 7, "got " + $$(".stamp-day").length);
   check("오늘 칸 강조", !!$(".stamp-day.is-today"));
-  // 해금 카드 상세
-  click($('.dex-card:not(.is-locked)'));
-  await sleep(100);
-  check("해금 요정 상세 모달", $("#modalBox").textContent.includes("별별 요정") || $("#modalBox").textContent.includes("획득일"));
-  click($('[data-action="close-modal"]'));
-  // 잠긴 카드 상세
-  click($('.dex-card.is-locked'));
-  await sleep(100);
-  check("잠긴 요정 안내 모달", $("#modalBox").textContent.includes("아직 만나지 못한"));
-  click($('[data-action="close-modal"]'));
-  await sleep(600); // debounced save flush
-  const st5 = JSON.parse(window.localStorage.getItem("family-dashboard.state.v1")).payload;
-  check("상세 연 후 seen 처리", st5.dex.seen && Object.keys(st5.dex.seen).length >= 1, JSON.stringify(st5.dex.seen));
+  // 공부 4개 + 올클리어 + 미션 + 할 일 = 45 XP (돈 경험치는 아직 0)
+  check("지난 공부·할 일이 경험치로 쌓여 있음", $("#petXpLabel").textContent.indexOf("45") === 0, $("#petXpLabel").textContent);
+  check("공부·할 일 칩도 45", $$(".pet-chip")[1] && $$(".pet-chip")[1].textContent.includes("45"), $$(".pet-chip").map((c) => c.textContent).join(" | "));
+  check("캐릭터 상태가 저장됨", (function () {
+    const st7 = JSON.parse(window.localStorage.getItem("family-dashboard.state.v1")).payload;
+    return !!st7.pet && st7.pet.xp === 45 && typeof st7.pet.care.full === "number";
+  })());
 
   console.log("\n[8] 채팅");
   click($('.tab-btn[data-tab="chat"]'));

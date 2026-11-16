@@ -1,6 +1,6 @@
 /* =========================================================
    우리 가족 기록장 — app.js
-   홈(날씨) · 공부 플랜+타이머 · 도장판+요정 도감 · 가족 미션 · 할 일 · 가족 채팅
+   홈(날씨) · 공부 플랜+타이머 · 🐣 내 캐릭터 키우기 · 가족 미션 · 할 일 · 가족 채팅
    ========================================================= */
 
 (function () {
@@ -223,6 +223,46 @@
     { id: "r-homework", name: "숙제하기" },
     { id: "r-meal",     name: "밥먹기" },
     { id: "r-brush",    name: "양치하기" }
+  ];
+
+  /* ---------- 🐣 내 캐릭터 키우기 (레벨업 · 돌보기) ---------- */
+  var PET_NAME_DEFAULT = "몽실이";
+  var PET_MONEY_PER_XP = 100;      // 모은 용돈 100원마다 경험치 1 (누적 적립 기준)
+  var PET_XP = {
+    study: 4,        // 공부 항목 하나 완료
+    studyAll: 8,     // 오늘 공부를 모두 끝냄
+    todo: 3,         // 다인 할 일 하나 완료
+    todoAll: 8,      // 다인 할 일을 모두 끝냄
+    mission: 10,     // 오늘의 가족 미션
+    routineAll: 8,   // 저녁 루틴 올클리어 (용돈은 따로 쌓여요)
+    bonus: 15        // 오늘 할 일 올클리어 특별 간식
+  };
+  // 돌보기 — 종류별 하루 횟수 제한 · 게이지 변화 · 경험치
+  var PET_CARE = {
+    feed: {
+      label: "밥 주기", ico: "🍚", xp: 2, cap: 3, full: 26, mood: 6, bond: 4, anim: "jump",
+      says: ["냠냠! 맛있어요 🍚", "밥 최고! 힘이 나요 💪", "고마워요 — 배불러요 😋"],
+      fullMsg: "배불러요~ 이따 또 주세요 🥺"
+    },
+    play: {
+      label: "놀아주기", ico: "🎈", xp: 2, cap: 3, full: -6, mood: 26, bond: 6, anim: "jump",
+      says: ["와아! 신난다 🎈", "한 번 더 놀아요!", "같이 놀아서 행복해요 💖"],
+      fullMsg: "오늘은 신나게 놀았어요 — 내일 또!"
+    },
+    pet: {
+      label: "쓰다듬기", ico: "✨", xp: 1, cap: 5, full: 0, mood: 8, bond: 18, anim: "sparkle",
+      says: ["쓰담쓰담 — 기분 좋아 ✨", "더 쓰다듬어 주세요 💗", "사랑 받는 기분이에요 🌸"],
+      fullMsg: "오늘은 충분히 쓰다듬었어요 💗"
+    }
+  };
+  // 성장 단계 — 경험치가 이만큼 쌓이면 모습이 바뀌고 점점 커져요
+  var PET_STAGES = [
+    { lv: 1, name: "알",          xp: 0,   img: "assets/pet_stage1.png?v=20261116", line: "아직 알 속에서 꼬물꼬물" },
+    { lv: 2, name: "아기 요정",   xp: 50,  img: "assets/pet_stage2.png?v=20261116", line: "알을 깨고 기어 나왔어요" },
+    { lv: 3, name: "꼬마 요정",   xp: 140, img: "assets/pet_stage3.png?v=20261116", line: "별 지팡이를 들었어요" },
+    { lv: 4, name: "어린이 요정", xp: 280, img: "assets/pet_stage4.png?v=20261116", line: "날개가 자랐어요" },
+    { lv: 5, name: "반짝 요정",   xp: 460, img: "assets/pet_stage5.png?v=20261116", line: "온몸이 반짝반짝" },
+    { lv: 6, name: "왕관 마스터", xp: 700, img: "assets/pet_stage6.png?v=20261116", line: "왕관을 쓴 최고 요정!" }
   ];
 
   /* ---------- 홈 태블릿 타이머 ---------- */
@@ -612,6 +652,7 @@
         spent: 0                          // 부모님이 쓴(차감한) 용돈
       },
       growth: normalizeGrowth(null),        // 다인이 키·몸무게 성장 기록
+      pet: normalizePet(null),              // 🐣 내 캐릭터(용돈·할 일로 자라는 요정)
       settings: { weatherCache: null, notify: false }
     };
   }
@@ -646,6 +687,9 @@
     if (!s.chat) { s.chat = []; changed = true; }
     if (!s.routine || typeof s.routine !== "object") { s.routine = normalizeRoutine(null); changed = true; }
     if (!s.growth || typeof s.growth !== "object") { s.growth = normalizeGrowth(null); changed = true; }
+    if (!s.pet || typeof s.pet !== "object") { s.pet = normalizePet(null); changed = true; }
+    if (s.pet && (!s.pet.care || !s.pet.ledger)) { s.pet = normalizePet(s.pet); changed = true; }
+    if (s.pet && petRoll(s.pet, today)) changed = true;
     if (!s.settings || typeof s.settings !== "object") { s.settings = { weatherCache: null, notify: false }; changed = true; }
     if (s.settings.notify === undefined) { s.settings.notify = false; changed = true; }
     if (!s.members || !s.members.length) { s.members = JSON.parse(JSON.stringify(CFG.defaultMembers)); changed = true; }
@@ -657,7 +701,7 @@
     if (!s) s = freshState();
     // 알려진 필드만 유지 (이상한 데이터 방어)
     var out = freshState();
-    ["members", "study", "stamps", "badges", "dex", "mission", "todos", "chat", "calendar", "checklists", "routine", "growth", "settings"].forEach(function (k) {
+    ["members", "study", "stamps", "badges", "dex", "mission", "todos", "chat", "calendar", "checklists", "routine", "growth", "pet", "settings"].forEach(function (k) {
       if (s[k] !== undefined) out[k] = s[k];
     });
     rollDailyState(out);
@@ -665,6 +709,7 @@
     out.checklists.lists = normalizeLists(out.checklists.lists);
     out.routine = normalizeRoutine(out.routine);
     out.growth = normalizeGrowth(out.growth);
+    out.pet = normalizePet(out.pet);
     return out;
   }
 
@@ -760,6 +805,8 @@
     if (rec.checked[id]) delete rec.checked[id];
     else rec.checked[id] = true;
     var st = routineStats(todayKey());
+    if (rec.checked[id] && st.allDone) petAward("routine-all", PET_XP.routineAll);
+    petCheckLevel();
     persist(true);
     renderAll();
     if (rec.checked[id] && st.allDone) {
@@ -829,6 +876,7 @@
 
   function resetAllowance() {
     confirmModal("용돈 기록 초기화", "모은 용돈과 날짜별 루틴 기록을 모두 지우고 0원부터 다시 시작해요. 루틴 항목 목록은 그대로 둘게요. 계속할까요?", "초기화", function () {
+      petMoneyXp();          // 지금까지 용돈으로 자란 경험치는 그대로 남겨요 (최고 기록 유지)
       state.routine.days = {};
       state.routine.spent = 0;
       persist(true);
@@ -837,7 +885,7 @@
     });
   }
 
-  /* ---------- 도장 / 배지 / 도감 ---------- */
+  /* ---------- 도장 / 배지 / 요정 친구 ---------- */
   function stampTotal() {
     var n = 0;
     Object.keys(state.stamps || {}).forEach(function (k) { n += Number(state.stamps[k] || 0); });
@@ -1509,19 +1557,25 @@
         '</div>' +
         '<div class="row" style="margin-top:12px;gap:8px">' +
           '<button class="btn btn-sm btn-soft grow" type="button" data-action="tab" data-tab="study">공부하러 가요 →</button>' +
-          '<button class="btn btn-sm btn-yellow grow" type="button" data-action="tab" data-tab="dex">도감 보기 🧚</button>' +
+          '<button class="btn btn-sm btn-yellow grow" type="button" data-action="tab" data-tab="pet">🐣 캐릭터 보기</button>' +
         '</div>' +
       '</div>';
     grid.appendChild(sumWrap);
 
-    // 인사 카드 — 맨 아래 나머지 줄
+    // 인사 카드 — 맨 아래 나머지 줄 ( + 내 캐릭터 미니 카드 )
     var me = memberById(meId);
+    var pet = petInfo();
+    var petP = petDay();
     var greet = el("div", "span-2 home-cell-greet");
     greet.innerHTML =
-      '<div class="card tight" style="display:flex;align-items:center;gap:12px">' +
-        '<img src="' + esc(me ? avatarOf(me) : "assets/avatar_daini.png") + '" alt="" style="width:52px;height:52px;border-radius:50%;object-fit:cover;border:2px solid #fff;box-shadow:var(--shadow-tiny)">' +
+      '<div class="card tight home-greet-card">' +
+        '<img class="hg-avatar" src="' + esc(me ? avatarOf(me) : "assets/avatar_daini.png") + '" alt="">' +
         '<div class="grow"><p class="title-font" style="font-size:16px">' + esc(me ? me.name : "") + '의 하루, 힘차게! ✨</p>' +
-        '<p class="muted">공부하고 도장 모아서 요정 친구들을 만나요</p></div>' +
+        '<p class="muted">공부하고 도장을 모으면 ' + esc(petP.name) + '도 쑥쑥 자라요</p></div>' +
+        '<button class="home-pet" type="button" data-action="tab" data-tab="pet" aria-label="내 캐릭터 키우기 열기">' +
+          '<img src="' + esc(pet.stage.img) + '" alt="' + esc(pet.stage.name) + '">' +
+          '<span class="hp-txt"><b>Lv.' + pet.lv + '</b><span>' + esc(pet.stage.name) + '</span></span>' +
+        '</button>' +
       '</div>';
     grid.appendChild(greet);
 
@@ -1687,6 +1741,7 @@
   function checkStudyCompletion() {
     var items = state.study.items || [];
     if (!items.length || !items.every(function (i) { return i.done; })) return;
+    if (petAward("study-all", PET_XP.studyAll)) petCheckLevel();
     if (state.study.rewarded) return;   // 하루 한 번만 보상
     state.study.rewarded = true;
     setTimeout(function () { addStamps(1, "오늘의 공부 플랜을 모두 끝냈어요!"); }, 250);
@@ -1746,115 +1801,461 @@
   }
 
   /* =========================================================
-     도장판 + 도감
+     🐣 내 캐릭터 키우기 — 레벨업 · 돌보기 · 올클리어 보너스
+     (예전 '도감' 탭 자리 — 요정 도감 대신 다인이 캐릭터를 키운다)
+     용돈(누적 적립) + 오늘 할 일/루틴 완료로 경험치가 쌓이고,
+     단계마다 모습·크기·장식이 점점 커지고 화려해진다.
      ========================================================= */
-  function renderDex() {
-    var root = qs("#dexContent");
-    if (!root) return;
-    root.innerHTML = "";
+  var petBubble = "";          // 잠깐 보여 주는 말풍선
+  var petBubbleUntil = 0;
+  var petNewLevel = 0;         // 방금 자란 레벨 (탭 배지 · '새 모습' 표시)
+  var petAnim = "";            // "jump" | "sparkle" | ""
 
-    var total = stampTotal();
-    var streak = computeStreak();
-    var today = todayKey();
+  function clampPct(n) { return Math.max(0, Math.min(100, Math.round(Number(n) || 0))); }
 
-    // 이번 주 (월요일 시작)
-    var now = new Date();
-    var dow = now.getDay(); // 0=일
-    var monOffset = (dow === 0 ? -6 : 1 - dow);
-    var monday = new Date(now.getTime() + monOffset * DAY_MS);
-
-    var days = [];
-    for (var i = 0; i < 7; i++) {
-      var d = new Date(monday.getTime() + i * DAY_MS);
-      var key = todayKey(d);
-      days.push({ key: key, dow: DOW_KO[(i + 1) % 7], n: Number(state.stamps[key] || 0), future: key > today });
-    }
-
-    var unlockedCount = Object.keys(state.dex.unlocked || {}).length;
-
-    var top = el("div");
-    top.innerHTML =
-      '<div class="card">' +
-        '<div class="stamp-head">' +
-          '<div class="section-title"><span class="ico">🌸</span>다인이 도장판</div>' +
-          '<span class="section-note">모은 도장 ' + total + '개</span>' +
-        '</div>' +
-        '<div class="stamp-board" style="margin-top:12px">' +
-          days.map(function (d) {
-            var cls = "stamp-day" + (d.key === today ? " is-today" : "") + (d.future ? " is-future" : "");
-            var dots = "";
-            var shown = Math.min(d.n, 6);
-            for (var k = 0; k < 6; k++) dots += '<span class="stamp-dot' + (k < shown ? "" : " empty") + '"></span>';
-            return '<div class="' + cls + '"><span class="stamp-dow">' + d.dow + '</span>' +
-              '<span class="stamp-count">' + (d.future ? "" : d.n) + '</span>' +
-              '<span class="stamp-dots">' + dots + '</span></div>';
-          }).join("") +
-        '</div>' +
-        '<div style="margin-top:12px" class="badges">' +
-          (streak >= 3 ? '<span class="badge-item">🔥 ' + streak + '일 연속 기록!</span>' : "") +
-          (state.badges.streak3 ? '<span class="badge-item">🏅 3일 연속 달성</span>' : '<span class="badge-item locked">🔒 3일 연속</span>') +
-          (state.badges.streak7 ? '<span class="badge-item">🏆 7일 연속 달성</span>' : '<span class="badge-item locked">🔒 7일 연속</span>') +
-          (state.badges.mission5 ? '<span class="badge-item">💖 가족 미션 5회</span>' : '<span class="badge-item locked">🔒 미션 5회</span>') +
-          (state.badges.mission10 ? '<span class="badge-item">💖 가족 미션 10회</span>' : '<span class="badge-item locked">🔒 미션 10회</span>') +
-        '</div>' +
-        '<p class="muted" style="margin-top:10px;font-size:11.5px">공부 · 미션 · 할 일을 끝내면 도장이 쌓여요. 도장마다 요정 친구가 한 명씩 찾아와요!</p>' +
-      '</div>';
-    root.appendChild(top);
-
-    // 도감
-    var dexCard = el("div", "card");
-    dexCard.innerHTML =
-      '<div class="section-head"><div class="section-title"><span class="ico">🧚</span>요정 도감</div>' +
-        '<span class="section-note">' + unlockedCount + ' / ' + FAIRIES.length + ' 친구</span></div>' +
-      '<div class="dex-grid" style="margin-top:12px" id="dexGrid">' +
-        FAIRIES.map(function (f) {
-          var unlocked = !!state.dex.unlocked[f.id];
-          var isNew = unlocked && !state.dex.seen[f.id];
-          var cls = "dex-card" + (unlocked ? "" : " is-locked") + (isNew ? " is-new" : "");
-          return '<button type="button" class="' + cls + '" data-action="dex-open" data-id="' + f.id + '">' +
-            '<span class="dex-thumb">' +
-              '<img src="' + esc(f.img) + '" alt="' + esc(unlocked ? f.name : "잠긴 요정") + '" loading="lazy">' +
-              (unlocked ? "" : '<span class="dex-lock">🔒</span>') +
-            '</span>' +
-            '<span class="dex-info">' +
-              '<span class="dex-name">' + esc(unlocked ? f.name : " ? ? ?") + '</span>' +
-              '<span class="dex-tag">' + esc(unlocked ? f.eng + " · " + f.personality : "아직 만나지 못한 친구") + '</span>' +
-              (unlocked ? "" : '<span class="dex-need">' + esc(f.how) + '에 만나요</span>') +
-            '</span>' +
-          '</button>';
-        }).join("") +
-      '</div>';
-    root.appendChild(dexCard);
+  function freshCare() {
+    return { fed: 0, played: 0, petted: 0, full: 50, mood: 50, bond: 30 };
   }
 
-  function openDexDetail(f) {
-    var unlocked = !!state.dex.unlocked[f.id];
-    if (unlocked) {
-      state.dex.seen[f.id] = true;
-      persist();
-      openModal(
-        '<div class="dex-hero">' +
-          '<img src="' + esc(f.img) + '" alt="' + esc(f.name) + '">' +
-          '<div class="grow">' +
-            '<h3 class="title-font" style="font-size:20px;color:#4A3B34">' + esc(f.name) + '</h3>' +
-            '<p class="muted">' + esc(f.eng) + ' · ' + esc(f.personality) + '</p>' +
-            '<p class="chip" style="margin-top:6px">획득일 ' + esc(fmtDateKo(state.dex.unlocked[f.id])) + '</p>' +
-          '</div>' +
-        '</div>' +
-        '<p style="font-size:13.5px;color:var(--ink-soft);line-height:1.6">' + esc(f.desc) + '</p>',
-        { title: "요정 친구" }
-      );
-      renderDex();
-    } else {
-      openModal(
-        '<div class="center" style="padding:6px 0">' +
-          '<p style="font-size:34px">🔒</p>' +
-          '<h3 class="title-font" style="font-size:18px;color:#4A3B34;margin-top:4px">아직 만나지 못한 친구</h3>' +
-          '<p class="muted" style="margin-top:6px">' + esc(f.how) + '면 만날 수 있어요.</p>' +
-          '<p class="muted">지금까지 모은 도장: <b class="title-font">' + stampTotal() + '</b>개</p>' +
-        '</div>',
-        { title: "? ? ?" }
-      );
+  function normalizePet(raw) {
+    var p = raw && typeof raw === "object" ? raw : {};
+    var care = p.care && typeof p.care === "object" ? p.care : {};
+    var out = {
+      name: String(p.name || PET_NAME_DEFAULT).trim().slice(0, 12) || PET_NAME_DEFAULT,
+      xp: Math.max(0, Math.round(Number(p.xp) || 0)),
+      moneyXp: Math.max(0, Math.round(Number(p.moneyXp) || 0)),
+      day: isDateKey(p.day) ? p.day : todayKey(),
+      bonusDay: isDateKey(p.bonusDay) ? p.bonusDay : "",
+      seenLevel: Math.max(1, Math.min(PET_STAGES.length, Math.round(Number(p.seenLevel) || 1))),
+      care: freshCare(),
+      ledger: {}                     // 오늘 이미 경험치를 준 항목
+    };
+    ["fed", "played", "petted"].forEach(function (k) {
+      out.care[k] = Math.max(0, Math.min(99, Math.round(Number(care[k]) || 0)));
+    });
+    out.care.full = clampPct(care.full === undefined ? 50 : care.full);
+    out.care.mood = clampPct(care.mood === undefined ? 50 : care.mood);
+    out.care.bond = clampPct(care.bond === undefined ? 30 : care.bond);
+    if (p.ledger && typeof p.ledger === "object") {
+      Object.keys(p.ledger).slice(0, 300).forEach(function (k) { out.ledger[k] = true; });
+    }
+    return out;
+  }
+
+  // 날짜가 바뀌면 오늘 돌보기 횟수가 새로 시작되고, 배고픔·심심함이 조금씩 쌓인다 (친밀도는 그대로)
+  function petRoll(p, today) {
+    if (!p || typeof p !== "object") return false;
+    if (p.day === today) return false;
+    p.day = today;
+    p.care.fed = 0;
+    p.care.played = 0;
+    p.care.petted = 0;
+    p.ledger = {};
+    p.care.full = clampPct(Math.max(10, p.care.full - 35));
+    p.care.mood = clampPct(Math.max(10, p.care.mood - 20));
+    return true;
+  }
+
+  function petDay(s) {
+    var st = s || state;
+    if (!st) return normalizePet(null);
+    if (!st.pet || typeof st.pet !== "object" || !st.pet.care || !st.pet.ledger) st.pet = normalizePet(st.pet);
+    petRoll(st.pet, todayKey());
+    return st.pet;
+  }
+
+  // 모은 용돈(누적 적립) 100원마다 경험치 1 — 쓴 돈이 있어도 줄지 않게 최고 기록을 기억해요
+  function petMoneyXp() {
+    var p = petDay();
+    var now = Math.floor(routineEarned() / PET_MONEY_PER_XP);
+    if (now > p.moneyXp) p.moneyXp = now;
+    return Math.max(0, Math.round(p.moneyXp));
+  }
+
+  function petXpTotal() {
+    var p = petDay();
+    return Math.max(0, Math.round(p.xp) + petMoneyXp());
+  }
+
+  function petStageOf(xp) {
+    var idx = 0;
+    for (var i = 0; i < PET_STAGES.length; i++) { if (xp >= PET_STAGES[i].xp) idx = i; }
+    return idx;
+  }
+
+  function petInfo() {
+    var xp = petXpTotal();
+    var idx = petStageOf(xp);
+    var stage = PET_STAGES[idx];
+    var next = PET_STAGES[idx + 1] || null;
+    var moneyXp = petMoneyXp();
+    return {
+      xp: xp,
+      idx: idx,
+      lv: stage.lv,
+      stage: stage,
+      next: next,
+      moneyXp: moneyXp,
+      eventXp: Math.max(0, xp - moneyXp),
+      pct: next ? clampPct((xp - stage.xp) / Math.max(1, next.xp - stage.xp) * 100) : 100,
+      toNext: next ? Math.max(0, next.xp - xp) : 0
+    };
+  }
+
+  // 같은 일에 두 번 주지 않도록 오늘 기록(p.ledger)을 확인하고 경험치를 준다
+  function petAward(key, amount) {
+    if (!key || !amount) return false;
+    var p = petDay();
+    if (p.ledger[key]) return false;
+    p.ledger[key] = true;
+    p.xp = Math.max(0, Math.round(p.xp + amount));
+    return true;
+  }
+
+  function petSay(text, ms) {
+    petBubble = text;
+    petBubbleUntil = Date.now() + (ms || 6000);
+  }
+
+  function petCheckLevel() {
+    var p = petDay();
+    var info = petInfo();
+    if (info.lv <= p.seenLevel) return null;
+    p.seenLevel = info.lv;
+    petNewLevel = info.lv;
+    petSay("새 모습이야! 고마워 💖", 8000);
+    toast("🎉 " + p.name + "가 자랐어요 — Lv." + info.lv + " " + info.stage.name, "🐣");
+    return info;
+  }
+
+  function paintPetBadge() {
+    var b = qs("#petBadge");
+    if (b) b.hidden = !petNewLevel;
+  }
+
+  function petCareUsed(kind, p) {
+    return kind === "feed" ? p.care.fed : kind === "play" ? p.care.played : p.care.petted;
+  }
+
+  // 오늘 할 일 = 경험치 (공부 · 다인 할 일 · 저녁 루틴 · 가족 미션)
+  function petQuests() {
+    var items = state.study.items || [];
+    var studyDone = items.filter(function (i) { return i.done; }).length;
+    var todos = state.todos.dain || [];
+    var todoDone = todos.filter(function (t) { return t.done; }).length;
+    var r = routineStats(todayKey());
+    var missionDone = !!state.mission.doneToday;
+
+    var list = [
+      { id: "study", ico: "📚", label: "오늘 공부", done: studyDone, total: items.length,
+        ok: items.length > 0 && studyDone === items.length, xp: "+" + PET_XP.study + "씩" },
+      { id: "todo", ico: "🗒️", label: "다인 할 일", done: todoDone, total: todos.length,
+        ok: todos.length > 0 && todoDone === todos.length, xp: "+" + PET_XP.todo + "씩" },
+      { id: "routine", ico: "🌙", label: "저녁 루틴", done: r.done, total: r.total,
+        ok: r.total > 0 && r.allDone, xp: "용돈+" },
+      { id: "mission", ico: "🌈", label: "가족 미션", done: missionDone ? 1 : 0, total: 1,
+        ok: missionDone, xp: "+" + PET_XP.mission }
+    ];
+    // 다인 할 일은 목록이 있을 때만 필수 (없으면 나머지 셋으로 판단)
+    var req = list.filter(function (q) { return q.id !== "todo" || q.total > 0; });
+    var left = req.filter(function (q) { return !q.ok; }).length;
+    return {
+      list: list,
+      required: req.length,
+      okCount: req.length - left,
+      left: left,
+      all: req.length >= 2 && left === 0,
+      claimed: petDay().bonusDay === todayKey()
+    };
+  }
+
+  function petCareAction(kind) {
+    var cfg = PET_CARE[kind];
+    if (!cfg) return;
+    var p = petDay();
+    if (petCareUsed(kind, p) >= cfg.cap) {
+      petSay(cfg.fullMsg, 5000);
+      petAnim = "shake";
+      renderPet();
+      toast(cfg.fullMsg, cfg.ico);
+      return;
+    }
+    if (kind === "feed") p.care.fed += 1;
+    else if (kind === "play") p.care.played += 1;
+    else p.care.petted += 1;
+    p.care.full = clampPct(p.care.full + cfg.full);
+    p.care.mood = clampPct(p.care.mood + cfg.mood);
+    p.care.bond = clampPct(p.care.bond + cfg.bond);
+    p.xp = Math.max(0, Math.round(p.xp + cfg.xp));
+    petSay(cfg.says[Math.floor(Math.random() * cfg.says.length)], 6000);
+    petAnim = cfg.anim;
+    petCheckLevel();
+    persist(true);
+    renderAll();
+    toast(cfg.ico + " " + cfg.label + " +" + cfg.xp + " XP", cfg.ico);
+  }
+
+  // 오늘 할 일 올클리어 → 하루 한 번 특별 간식
+  function petClaimBonus() {
+    var p = petDay();
+    var q = petQuests();
+    if (p.bonusDay === todayKey()) {
+      toast("오늘 간식은 이미 받았어요 — 내일 또!", "🍰");
+      return;
+    }
+    if (!q.all) {
+      toast("오늘 할 일이 " + q.left + "개 남았어요 — 다 하면 간식을 줘요", "🍰");
+      petSay("조금만 더 힘내요!", 4000);
+      renderPet();
+      return;
+    }
+    p.bonusDay = todayKey();
+    p.xp = Math.max(0, Math.round(p.xp + PET_XP.bonus));
+    p.care.full = clampPct(p.care.full + 45);
+    p.care.mood = clampPct(p.care.mood + 45);
+    p.care.bond = clampPct(p.care.bond + 12);
+    petSay("냠냠! 딸기 케이크 최고야 🍰", 9000);
+    petAnim = "sparkle";
+    petCheckLevel();
+    persist(true);
+    renderAll();
+    toast("🍰 올클리어 간식! +" + PET_XP.bonus + " XP", "🍰");
+  }
+
+  function openPetRename() {
+    var p = petDay();
+    openModal(
+      '<div class="field"><label for="petNameInput">캐릭터 이름</label>' +
+        '<input type="text" id="petNameInput" maxlength="12" value="' + esc(p.name) + '"></div>' +
+      '<p class="muted" style="font-size:12px">마음에 드는 이름을 지어 주세요.</p>' +
+      '<div class="modal-actions">' +
+        '<button class="btn btn-ghost" type="button" data-action="close-modal">취소</button>' +
+        '<button class="btn btn-primary" type="button" id="petNameSave">저장</button>' +
+      '</div>',
+      { title: "🎀 이름 짓기" }
+    );
+    var input = qs("#petNameInput");
+    if (input) { input.focus(); input.select(); }
+    qs("#petNameSave").addEventListener("click", function () {
+      var v = String(qs("#petNameInput").value || "").trim().slice(0, 12);
+      if (!v) { toast("이름을 적어 주세요", "🎀"); return; }
+      p.name = v;
+      closeModal();
+      persist(true);
+      renderAll();
+      toast("이름을 『" + v + "』(으)로 지었어요", "🎀");
+    });
+  }
+
+  function openPetStage(lv) {
+    var stage = PET_STAGES.find(function (s) { return s.lv === Number(lv); });
+    if (!stage) return;
+    var info = petInfo();
+    var open = info.xp >= stage.xp;
+    openModal(
+      '<div class="center">' +
+        '<img class="pet-modal-img" src="' + esc(stage.img) + '" alt="' + esc(stage.name) + '">' +
+        '<h3 class="title-font" style="font-size:19px;color:#4A3B34">Lv.' + stage.lv + " " + esc(stage.name) + '</h3>' +
+        '<p class="muted" style="margin-top:4px">' + esc(stage.line) + '</p>' +
+        '<p class="chip" style="margin-top:10px">' +
+          (open ? "지금까지 자라온 모습이에요" : "경험치 " + stage.xp + "부터 만날 수 있어요") +
+        '</p>' +
+      '</div>',
+      { title: "성장 단계", center: true }
+    );
+  }
+
+  function petBubbleText(p, info) {
+    if (petBubble && Date.now() < petBubbleUntil) return petBubble;
+    if (p.care.full < 25) return "배고파요… 밥 주세요 🥺";
+    if (p.care.mood < 25) return "심심해요 — 같이 놀아요!";
+    if (p.care.bond < 25) return "쓰다듬어 주세요 💗";
+    if (!info.next) return "왕관 마스터! 최고예요 🏆";
+    return "오늘도 같이 힘내요! ✨";
+  }
+
+  function renderPet() {
+    var root = qs("#petContent");
+    if (!root) return;
+    var p = petDay();
+    var info = petInfo();
+    var q = petQuests();
+    var today = todayKey();
+    var isNewLook = !!petNewLevel && petNewLevel >= info.lv;
+
+    root.innerHTML = "";
+
+    /* ── 1) 내 캐릭터 (단계마다 점점 크게) ── */
+    var friends = FAIRIES.filter(function (f) { return !!state.dex.unlocked[f.id]; }).slice(0, 4);
+    var sparks = ["✨", "⭐", "💗", "🌟", "✿"];
+    var hero = el("div", "card pet-hero-card" + (isNewLook ? " is-newlook" : ""));
+    hero.id = "petHero";
+    hero.innerHTML =
+      '<div class="pet-scene">' +
+        '<span class="pet-lv-badge">Lv.' + info.lv + '</span>' +
+        (isNewLook ? '<span class="pet-newlook-ribbon">새 모습!</span>' : "") +
+        sparks.map(function (s, i) { return '<span class="pet-spark ps-' + (i + 1) + '" aria-hidden="true">' + s + '</span>'; }).join("") +
+        '<img class="pet-img' + (petAnim ? " is-" + petAnim : "") + '" id="petImg" src="' + esc(info.stage.img) + '"' +
+          ' style="height:' + (58 + info.idx * 8) + '%"' +
+          ' alt="' + esc(p.name + " (" + info.stage.name + ")") + '">' +
+        '<div class="pet-bubble" id="petBubble">' + esc(petBubbleText(p, info)) + '</div>' +
+        (friends.length
+          ? '<div class="pet-friends" aria-label="함께 사는 요정 친구">' +
+              friends.map(function (f) { return '<img src="' + esc(f.img) + '" alt="' + esc(f.name) + '" title="' + esc(f.name) + '">'; }).join("") +
+            '</div>'
+          : "") +
+      '</div>' +
+      '<div class="pet-id">' +
+        '<p class="pet-name"><b id="petName">' + esc(p.name) + '</b>' +
+          '<button class="mini-icon" type="button" data-action="pet-rename" aria-label="이름 짓기" title="이름 짓기">✏️</button></p>' +
+        '<p class="pet-stage-line"><b>Lv.' + info.lv + " " + esc(info.stage.name) + '</b> · ' + esc(info.stage.line) + '</p>' +
+      '</div>' +
+      '<div class="progress-wrap" style="margin-top:12px">' +
+        '<div class="progress-head"><span>경험치</span><b id="petXpLabel">' +
+          (info.next ? info.xp + " / " + info.next.xp : info.xp + " (최고 레벨)") + '</b></div>' +
+        '<div class="progress"><i id="petXpBar" style="width:' + info.pct + '%"></i></div>' +
+      '</div>' +
+      '<div class="pet-chips">' +
+        '<span class="pet-chip">💰 모은 용돈 +' + info.moneyXp + '</span>' +
+        '<span class="pet-chip">⭐ 할 일 · 돌보기 +' + info.eventXp + '</span>' +
+        '<span class="pet-chip is-next" id="petToNext">' +
+          (info.next ? "다음 레벨까지 " + info.toNext : "최고 레벨이에요!") + '</span>' +
+      '</div>';
+    root.appendChild(hero);
+
+    /* ── 2) 돌보기 — 밥 주기 · 놀아주기 · 쓰다듬기 ── */
+    var care = el("div", "card");
+    care.id = "petCareCard";
+    care.innerHTML =
+      '<div class="section-head">' +
+        '<div class="section-title"><span class="ico">🎀</span>' + esc(p.name) + ' 돌보기</div>' +
+        '<span class="section-note">누르면 기분이 좋아져요</span></div>' +
+      '<div class="pet-care-grid">' +
+        ["feed", "play", "pet"].map(function (k) {
+          var c = PET_CARE[k];
+          var left = Math.max(0, c.cap - petCareUsed(k, p));
+          return '<button class="pet-care-btn' + (left ? "" : " is-full") + '" type="button"' +
+            ' data-action="pet-care" data-care="' + k + '" aria-label="' + esc(c.label) + '">' +
+            '<span class="pc-ico" aria-hidden="true">' + c.ico + '</span>' +
+            '<span class="pc-label">' + esc(c.label) + '</span>' +
+            '<span class="pc-left">' + (left ? "오늘 " + left + "번" : "다음에 또!") + '</span>' +
+            '</button>';
+        }).join("") +
+      '</div>' +
+      '<div class="pet-gauges">' +
+        [
+          { k: "full", ico: "🍚", label: "포만감", v: p.care.full },
+          { k: "mood", ico: "😊", label: "기분", v: p.care.mood },
+          { k: "bond", ico: "💗", label: "친밀도", v: p.care.bond }
+        ].map(function (g) {
+          return '<div class="pet-gauge" id="petGauge-' + g.k + '">' +
+            '<span class="pg-label">' + g.ico + " " + g.label + '</span>' +
+            '<span class="pg-bar"><i style="width:' + g.v + '%"></i></span>' +
+            '<b class="pg-num">' + g.v + '</b>' +
+          '</div>';
+        }).join("") +
+      '</div>';
+    root.appendChild(care);
+
+    /* ── 3) 오늘 할 일 = 경험치 + 올클리어 간식 ── */
+    var quest = el("div", "card");
+    quest.id = "petQuestCard";
+    quest.innerHTML =
+      '<div class="section-head">' +
+        '<div class="section-title"><span class="ico">🗒️</span>오늘 할 일 = 경험치</div>' +
+        '<span class="section-note" id="petQuestNote">' + q.okCount + ' / ' + q.required + ' 완료</span></div>' +
+      '<div class="pet-quest-list">' +
+        q.list.map(function (it) {
+          var pct = it.total ? Math.round(it.done / it.total * 100) : 0;
+          var count = it.total > 1 ? it.done + " / " + it.total : (it.ok ? "완료" : "아직");
+          return '<div class="pet-quest' + (it.ok ? " is-done" : "") + '">' +
+            '<span class="pq-ico" aria-hidden="true">' + it.ico + '</span>' +
+            '<span class="pq-body">' +
+              '<span class="pq-label">' + esc(it.label) + '</span>' +
+              '<span class="pq-bar"><i style="width:' + pct + '%"></i></span>' +
+            '</span>' +
+            '<span class="pq-count">' + count + '</span>' +
+            '<span class="pq-xp">' + esc(it.xp) + '</span>' +
+            '<span class="pq-check" aria-hidden="true">' + (it.ok ? "✓" : "") + '</span>' +
+          '</div>';
+        }).join("") +
+      '</div>' +
+      '<div class="pet-bonus' + (q.all ? " is-on" : "") + (q.claimed ? " is-claimed" : "") + '" id="petBonusBox">' +
+        '<p class="pb-title">🍰 오늘 할 일 올클리어 보너스</p>' +
+        '<p class="pb-sub" id="petBonusSub">' + (q.claimed
+            ? "오늘 간식을 받았어요 — 내일 또 만나요!"
+            : q.all
+              ? "전부 끝냈어요! 특별 간식을 받아요"
+              : "남은 할 일 " + q.left + "개 — 다 하면 특별 간식 (+" + PET_XP.bonus + " XP)") + '</p>' +
+        '<button class="btn btn-yellow btn-block" type="button" data-action="pet-bonus"' + (q.claimed ? " disabled" : "") + '>' +
+          (q.claimed ? "🍰 오늘 간식 완료" : "🍰 특별 간식 받기 (+" + PET_XP.bonus + " XP)") + '</button>' +
+      '</div>';
+    root.appendChild(quest);
+
+    /* ── 4) 성장 단계 (Lv.1 알 → Lv.6 왕관 마스터) ── */
+    var stages = el("div", "card");
+    stages.id = "petStageCard";
+    stages.innerHTML =
+      '<div class="section-head">' +
+        '<div class="section-title"><span class="ico">🌱</span>성장 단계</div>' +
+        '<span class="section-note">Lv.' + info.lv + ' / ' + PET_STAGES.length + '</span></div>' +
+      '<div class="pet-stage-grid">' +
+        PET_STAGES.map(function (s) {
+          var open = info.xp >= s.xp;
+          var now = s.lv === info.lv;
+          return '<button class="pet-stage' + (open ? "" : " is-locked") + (now ? " is-now" : "") + '" type="button"' +
+            ' data-action="pet-stage" data-lv="' + s.lv + '"' +
+            ' aria-label="Lv.' + s.lv + " " + esc(open ? s.name : "아직 못 만난 단계") + '">' +
+            '<span class="ps-thumb"><img src="' + esc(s.img) + '" alt="" loading="lazy">' +
+              (open ? "" : '<span class="ps-lock" aria-hidden="true">🔒</span>') + '</span>' +
+            '<span class="ps-lv">Lv.' + s.lv + '</span>' +
+            '<span class="ps-name">' + (open ? esc(s.name) : "? ? ?") + '</span>' +
+          '</button>';
+        }).join("") +
+      '</div>' +
+      '<p class="pet-hint">용돈을 모으고 오늘 할 일을 끝낼수록 경험치가 쌓여 점점 자라요. 도장을 모으면 요정 친구도 찾아와요!</p>';
+    root.appendChild(stages);
+
+    /* ── 5) 이번 주 도장 (예전 도장판은 여기 작게 남겨요) ── */
+    var streak = computeStreak();
+    var now = new Date();
+    var dow = now.getDay();
+    var monOffset = (dow === 0 ? -6 : 1 - dow);
+    var monday = new Date(now.getTime() + monOffset * DAY_MS);
+    var stamp = el("div", "card tight");
+    stamp.id = "petStampCard";
+    stamp.innerHTML =
+      '<div class="stamp-head">' +
+        '<div class="section-title"><span class="ico">🌸</span>이번 주 도장</div>' +
+        '<span class="section-note">모은 도장 ' + stampTotal() + '개</span></div>' +
+      '<div class="stamp-board" style="margin-top:10px">' +
+        [0, 1, 2, 3, 4, 5, 6].map(function (i) {
+          var d = new Date(monday.getTime() + i * DAY_MS);
+          var key = todayKey(d);
+          var n = Number(state.stamps[key] || 0);
+          var cls = "stamp-day" + (key === today ? " is-today" : "") + (key > today ? " is-future" : "");
+          var dots = "";
+          for (var k = 0; k < 6; k++) dots += '<span class="stamp-dot' + (k < Math.min(n, 6) ? "" : " empty") + '"></span>';
+          return '<div class="' + cls + '"><span class="stamp-dow">' + DOW_KO[(i + 1) % 7] + '</span>' +
+            '<span class="stamp-count">' + (key > today ? "" : n) + '</span>' +
+            '<span class="stamp-dots">' + dots + '</span></div>';
+        }).join("") +
+      '</div>' +
+      '<div class="badges" style="margin-top:10px">' +
+        (streak >= 3 ? '<span class="badge-item">🔥 ' + streak + '일 연속 기록!</span>' : "") +
+        (state.badges.streak3 ? '<span class="badge-item">🏅 3일 연속 달성</span>' : '<span class="badge-item locked">🔒 3일 연속</span>') +
+        (state.badges.streak7 ? '<span class="badge-item">🏆 7일 연속 달성</span>' : '<span class="badge-item locked">🔒 7일 연속</span>') +
+      '</div>';
+    root.appendChild(stamp);
+
+    paintPetBadge();
+
+    // 한 번만 재생하는 반응 애니메이션
+    if (petAnim) {
+      var img = qs("#petImg");
+      var kind = petAnim;
+      petAnim = "";
+      if (img) setTimeout(function () { img.classList.remove("is-" + kind); }, 1200);
     }
   }
 
@@ -3168,7 +3569,7 @@
         '<button class="btn btn-xs ' + (state.settings && state.settings.notify ? "btn-ghost" : "btn-soft") + '" type="button" data-action="toggle-notify">' +
           (state.settings && state.settings.notify ? "끄기" : "알림 켜기") + '</button></div>' +
       '<h4 class="title-font" style="font-size:14px;color:#5A463C;margin-top:10px">도장 초기화</h4>' +
-      '<p class="muted" style="font-size:11.5px">도장·배지·도감을 모두 지우고 새로 시작해요. (채팅·할 일은 그대로)</p>' +
+      '<p class="muted" style="font-size:11.5px">도장·배지·만난 요정을 모두 지우고 새로 시작해요. (캐릭터·채팅·할 일은 그대로)</p>' +
       '<button class="btn btn-xs btn-danger" type="button" data-action="reset-stamps">도장판 비우기</button>',
       { title: "설정" }
     );
@@ -3252,13 +3653,18 @@
     });
     if (tab === "chat") { renderChat(); setUnread(0); hideChatBanner(); }
     if (tab === "growth") renderGrowth();
+    if (tab === "pet") {
+      renderPet();
+      // 잠깐 '새 모습'을 보여 준 뒤 배지를 지워요
+      setTimeout(function () { petNewLevel = 0; paintPetBadge(); }, 3200);
+    }
     if (tab === "home") { renderHomeWeather(); fetchWeather(false); }
   }
 
   function renderAll() {
     renderHome();
     renderStudy();
-    renderDex();
+    renderPet();
     renderMission();
     renderTogether();
     renderGrowth();
@@ -3323,6 +3729,8 @@
         it2.done = !it2.done;
         if (it2.done) {
           toast("『" + it2.name + "』 완료! 대단해요 🎉", "⭐");
+          petAward("study:" + it2.id, PET_XP.study);
+          petCheckLevel();
           checkStudyCompletion();
         }
         persist(); renderAll();
@@ -3394,18 +3802,19 @@
         renderStudy();
         break;
 
-      /* dex */
-      case "dex-open": {
-        var f = FAIRIES.find(function (x) { return x.id === id; });
-        if (f) openDexDetail(f);
-        break;
-      }
+      /* 🐣 내 캐릭터 키우기 */
+      case "pet-care": petCareAction(btn.getAttribute("data-care")); break;
+      case "pet-bonus": petClaimBonus(); break;
+      case "pet-rename": openPetRename(); break;
+      case "pet-stage": openPetStage(btn.getAttribute("data-lv")); break;
 
       /* mission */
       case "mission-done": {
         if (state.mission.doneToday) return;
         state.mission.doneToday = true;
         state.mission.doneTotal += 1;
+        petAward("mission", PET_XP.mission);
+        petCheckLevel();
         addStamps(1, "가족 미션 『" + MISSION_POOL[state.mission.index % MISSION_POOL.length].text + "』 완료!");
         break;
       }
@@ -3468,9 +3877,11 @@
         if (!t) return;
         t.done = !t.done;
         if (t.done && who === "dain" && t.done) {
+          petAward("todo:" + t.id, PET_XP.todo);
           // 다인이의 할 일이 모두 끝나면 도장
           var list2 = state.todos.dain;
           if (list2.length && list2.every(function (x) { return x.done; })) {
+            petAward("todo-all", PET_XP.todoAll);
             addStamps(1, memberName("dain") + "의 오늘 할 일을 모두 끝냈어요!");
           } else {
             toast("할 일 완료! 👏", "✅");
@@ -3478,6 +3889,7 @@
         } else if (t.done) {
           toast("할 일 완료! 👏", "✅");
         }
+        petCheckLevel();
         persist(); renderAll();
         break;
       }
@@ -3672,7 +4084,7 @@
       case "export-data": exportData(); break;
       case "import-data": importData(); break;
       case "reset-stamps":
-        confirmModal("도장판 비우기", "모든 도장·배지·도감을 지우고 새로 시작해요. 계속할까요?", "비울래요", function () {
+        confirmModal("도장판 비우기", "모든 도장·배지·만난 요정을 지우고 새로 시작해요. 캐릭터 키우기 기록은 그대로예요. 계속할까요?", "비울래요", function () {
           state.stamps = {};
           state.badges = {};
           state.dex = { unlocked: {}, seen: {} };
