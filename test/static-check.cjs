@@ -188,7 +188,7 @@ console.log("\n[10] 🐣 내 캐릭터 키우기 (도감 탭 교체)");
   check("돌보기 3종(밥·놀기·쓰다듬기)", /var PET_CARE = \{/.test(app) && /label: "밥 주기"/.test(app) && /label: "놀아주기"/.test(app) && /label: "쓰다듬기"/.test(app));
   check("게이지 3종(포만감·기분·친밀도)", /포만감/.test(app) && /친밀도/.test(app) && /function renderPet\(\)/.test(app));
   check("올클리어 간식", /function petClaimBonus\(\)/.test(app) && /올클리어/.test(app));
-  check("state.pet 저장·정규화", /pet: normalizePet\(null\)/.test(app) && /out\.pet = normalizePet\(out\.pet\)/.test(app) && /"pet", "settings"/.test(app));
+  check("state.pet 저장·정규화", /pet: normalizePet\(null\)/.test(app) && /out\.pet = normalizePet\(out\.pet\)/.test(app) && /"pet", "quiz", "settings"/.test(app));
   check("홈 미니 카드", /class="home-pet"/.test(app) && /class="hg-avatar"/.test(app));
   check("키우기 탭 스타일", /\.pet-hero-card\s*\{/.test(css) && /\.pet-care-btn\s*\{/.test(css) && /\.pet-quest\s*\{/.test(css) && /\.pet-stage\s*\{/.test(css) && /\.home-pet\s*\{/.test(css));
   check("단계별 반응 애니메이션", /@keyframes petJump/.test(css) && /@keyframes petSparkle/.test(css));
@@ -201,6 +201,25 @@ console.log("\n[11] 채팅 메시지 삭제");
   check("삭제 전 확인 창", /function deleteChat\([\s\S]{0,900}confirmModal\(/.test(app) && /function deleteChat\([\s\S]{0,900}markDeleted\("chat"/.test(app));
   check("삭제 버튼 스타일(누르기 좋은 크기)", /\.msg-del\s*\{[^}]*width:\s*26px/.test(css) && /\.msg-del\s*\{[^}]*height:\s*26px/.test(css));
   check("store 가 deleted.chat 을 병합·제거에 사용", /"chat"[^\n]*TOMBSTONE_KEYS|TOMBSTONE_KEYS = \[[^\]]*"chat"/.test(read("store.js")) && /payload\.chat = purge\(payload\.chat, d\.chat\)/.test(read("store.js")));
+}
+
+console.log("\n[12] 2026-11-17 추가 (공휴일 · 주간 날씨 · 오늘의 퀴즈)");
+{
+  const holidays = read("holidays.js");
+  const quizzes = read("quizzes.js");
+  check("공휴일 내장 데이터 파일 로드", /<script src="holidays\.js\?v=/.test(html) && /window\.KR_HOLIDAYS/.test(holidays));
+  check("퀴즈 데이터 파일 로드", /<script src="quizzes\.js\?v=/.test(html) && /window\.KR_QUIZZES/.test(quizzes));
+  check("스크립트가 app.js 보다 먼저", html.indexOf("holidays.js") < html.indexOf("app.js") && html.indexOf("quizzes.js") < html.indexOf("app.js"));
+  check("2026·2027 공휴일 주요 날짜", /"2026-12-25": "기독탄신일"/.test(holidays) && /"2027-02-07": "설날"/.test(holidays) && /"2027-10-11": "한글날 대체휴일"/.test(holidays));
+  check("공휴일 이름 조회·API 보충", /function holidayName\(/.test(app) && /date\.nager\.at/.test(app) && /function ensureHolidayYear\(/.test(app));
+  check("세 달력 모두 빨간 날 표시", /hcal-num' \+ \(hol \? " is-hol"/.test(app) && /cal-num' \+ \(hol \? " is-hol"/.test(app) && /acal-num' \+ \(hol \? " is-hol"/.test(app));
+  check("공휴일 CSS(빨간 숫자)", /\.cal-cell \.cal-num\.is-hol/.test(css) && /#E04B62/.test(css));
+  check("주간 예보 요청(7일·강수확률)", /daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max/.test(app) && /forecast_days=7/.test(app));
+  check("주간 날씨 스트립", /function weekStripHtml\(/.test(app) && /id="weekStrip"/.test(app) && /\.week-strip\s*\{/.test(css));
+  check("퀴즈 3문제·날짜 고정", /QUIZ_PER_DAY = 3/.test(app) && /function todayQuizzes\(/.test(app) && /function quizSeed\(/.test(app));
+  check("퀴즈 보기·힌트·도장 연결", /case "quiz-pick"/.test(app) && /case "quiz-hint"/.test(app) && /quizState\(\)\.rewarded\[qDay\] = true/.test(app));
+  check("퀴즈 문제 30개 이상", (quizzes.match(/id: "q-/g) || []).length >= 30, String((quizzes.match(/id: "q-/g) || []).length));
+  check("공부 추가 버튼 유지", /data-action="add-study"/.test(app) && /\+ 공부 추가/.test(app));
 }
 
 console.log("\n================================");

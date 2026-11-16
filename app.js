@@ -343,6 +343,68 @@
     return cells;
   }
 
+  /* ---------- 공휴일(빨간 날) ---------- */
+  // 내장 데이터(holidays.js)를 먼저 쓰고, 그 해 데이터가 없을 때만 공개 API(Nager.Date)로 보충한다.
+  // → 인터넷이 없어도 달력에 빨간 날이 그대로 보이고, 데이터가 틀릴 수 있는 API가 내장 목록을 덮지 않는다.
+  var HOLIDAY_API = { years: {}, asked: {} };
+  var HOLIDAY_API_URL = "https://date.nager.at/api/v3/PublicHolidays/";
+
+  function builtinHolidays() {
+    return (window.KR_HOLIDAYS && typeof window.KR_HOLIDAYS === "object") ? window.KR_HOLIDAYS : {};
+  }
+
+  function holidayYearBuiltIn(year) {
+    var h = builtinHolidays();
+    var ys = String(year);
+    var keys = Object.keys(h);
+    for (var i = 0; i < keys.length; i++) {
+      if (keys[i].slice(0, 4) === ys) return true;
+    }
+    return false;
+  }
+
+  function holidayName(key) {
+    if (!isDateKey(key)) return "";
+    var ys = String(key).slice(0, 4);
+    if (holidayYearBuiltIn(ys)) return builtinHolidays()[key] || "";
+    var api = HOLIDAY_API.years[ys];
+    return (api && api[key]) || "";
+  }
+
+  function holidaysInMonth(y, m) {
+    var out = [];
+    monthCells(y, m).forEach(function (c) {
+      if (!c.inMonth) return;
+      var name = holidayName(c.key);
+      if (name) out.push({ key: c.key, day: c.day, name: name });
+    });
+    return out;
+  }
+
+  // 내장 데이터가 없는 연도만 API에서 받아 둔다. 실패해도 한 번만 시도하고 조용히 내장 데이터만 쓴다.
+  function ensureHolidayYear(year) {
+    var ys = String(year);
+    if (!/^\d{4}$/.test(ys) || holidayYearBuiltIn(ys) || HOLIDAY_API.asked[ys]) return;
+    if (typeof fetch !== "function") return;
+    HOLIDAY_API.asked[ys] = true;
+    fetch(HOLIDAY_API_URL + ys + "/KR").then(function (r) {
+      if (!r.ok) throw new Error("holiday HTTP " + r.status);
+      return r.json();
+    }).then(function (list) {
+      var map = {};
+      (Array.isArray(list) ? list : []).forEach(function (h) {
+        if (!h || !isDateKey(h.date)) return;
+        var types = Array.isArray(h.types) ? h.types : [];
+        if (types.length && types.indexOf("Public") === -1) return;   // 기념일(Observance)은 빼요
+        var name = String(h.localName || h.name || "").trim();
+        if (!name) return;
+        if (!map[h.date]) map[h.date] = name;
+      });
+      HOLIDAY_API.years[ys] = map;
+      renderAll();
+    }).catch(function () { /* 오프라인 · API 오류: 내장 공휴일 데이터만 사용 */ });
+  }
+
   function fmtTime12(t) {
     var m = /^(\d{1,2}):(\d{2})$/.exec(String(t || ""));
     if (!m) return "";
@@ -714,6 +776,7 @@
       },
       growth: normalizeGrowth(null),        // 다인이 키·몸무게 성장 기록
       pet: normalizePet(null),              // 🐣 내 캐릭터(용돈·할 일로 자라는 요정)
+      quiz: { answered: {}, rewarded: {} },  // 🎈 오늘의 퀴즈 — 맞힌 문제 / 도장 받은 날
       settings: { weatherCache: null, notify: false }
     };
   }
@@ -752,6 +815,7 @@
     if (!s.pet || typeof s.pet !== "object") { s.pet = normalizePet(null); changed = true; }
     if (s.pet && (!s.pet.care || !s.pet.ledger)) { s.pet = normalizePet(s.pet); changed = true; }
     if (s.pet && petRoll(s.pet, today)) changed = true;
+    if (!s.quiz || typeof s.quiz !== "object" || Array.isArray(s.quiz)) { s.quiz = { answered: {}, rewarded: {} }; changed = true; }
     if (!s.settings || typeof s.settings !== "object") { s.settings = { weatherCache: null, notify: false }; changed = true; }
     if (s.settings.notify === undefined) { s.settings.notify = false; changed = true; }
     if (!s.members || !s.members.length) { s.members = JSON.parse(JSON.stringify(CFG.defaultMembers)); changed = true; }
@@ -763,7 +827,7 @@
     if (!s) s = freshState();
     // 알려진 필드만 유지 (이상한 데이터 방어)
     var out = freshState();
-    ["members", "study", "stamps", "badges", "dex", "mission", "todos", "chat", "quickPhrases", "calendar", "checklists", "routine", "growth", "pet", "settings", "deleted"].forEach(function (k) {
+    ["members", "study", "stamps", "badges", "dex", "mission", "todos", "chat", "quickPhrases", "calendar", "checklists", "routine", "growth", "pet", "quiz", "settings", "deleted"].forEach(function (k) {
       if (s[k] !== undefined) out[k] = s[k];
     });
     if (!out.deleted || typeof out.deleted !== "object" || Array.isArray(out.deleted)) out.deleted = {};
@@ -776,6 +840,7 @@
     routineFreezePast(out);          // 지난 날 모은 돈을 기록으로 굳혀 둔다(날짜가 바뀌어도 유지)
     out.growth = normalizeGrowth(out.growth);
     out.pet = normalizePet(out.pet);
+    out.quiz = normalizeQuiz(out.quiz);
     return out;
   }
 
@@ -1220,6 +1285,31 @@
     return tips.slice(0, 3);
   }
 
+  function weekStripHtml(cache) {
+    var days = (cache && Array.isArray(cache.week)) ? cache.week : [];
+    if (!days.length) return "";
+    var today = todayKey();
+    var cells = days.slice(0, 7).map(function (d) {
+      var info = weatherCodeInfo(d.code);
+      var isToday = d.date === today;
+      var dow = isToday ? "오늘" : (DOW_KO[dowOfKey(d.date)] || "");
+      var pop = (d.pop != null && d.pop >= 20)
+        ? '<span class="wk-pop" aria-label="비 올 확률 ' + d.pop + '%">☔' + d.pop + '%</span>'
+        : '<span class="wk-pop is-none" aria-hidden="true">·</span>';
+      return '<div class="wk-day' + (isToday ? " is-today" : "") + '" title="' + esc(fmtDayLabel(d.date) + " " + info.label) + '">' +
+        '<span class="wk-dow">' + esc(dow) + '</span>' +
+        '<span class="wk-ico" aria-hidden="true">' + info.icon + '</span>' +
+        '<span class="wk-max">' + (d.max != null ? Math.round(d.max) + "°" : "-") + '</span>' +
+        '<span class="wk-min">' + (d.min != null ? Math.round(d.min) + "°" : "-") + '</span>' +
+        pop +
+      '</div>';
+    }).join("");
+    return '<div class="week-strip" id="weekStrip" aria-label="이번 주 날씨">' +
+      '<div class="wk-head"><span class="wk-title">이번 주 날씨</span><span class="wk-legend">위 최고 · 아래 최저</span></div>' +
+      '<div class="wk-days">' + cells + '</div>' +
+    '</div>';
+  }
+
   function renderHomeWeather() {
     var box = qs("#weatherCard");
     if (!box) return;
@@ -1266,6 +1356,7 @@
         '</div>' +
       '</div>' +
       '<div class="weather-badges">' + badges + '</div>' +
+      weekStripHtml(cache) +
       '<div class="tips">' +
         tips.map(function (t) { return '<div class="tip"><span class="tip-ico">' + t.ico + '</span><span>' + esc(t.txt) + '</span></div>'; }).join("") +
       '</div>' +
@@ -1287,15 +1378,16 @@
     if (typeof fetch !== "function") { weatherUnavailable(); return; }
     var w = CFG.weather;
     var cache = state.settings && state.settings.weatherCache;
-    var fresh = cache && cache.fetchedAt && (Date.now() - cache.fetchedAt < w.refreshMinutes * 60 * 1000);
+    var fresh = cache && cache.fetchedAt && (Date.now() - cache.fetchedAt < w.refreshMinutes * 60 * 1000) &&
+      Array.isArray(cache.week) && cache.week.length > 0;
     if (!force && fresh) return;
 
     var wUrl = w.forecastUrl +
       "?latitude=" + w.lat + "&longitude=" + w.lon +
       "&current=temperature_2m,weather_code,relative_humidity_2m" +
-      "&daily=temperature_2m_max,temperature_2m_min" +
+      "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max" +
       "&timezone=" + encodeURIComponent(w.timezone) +
-      "&forecast_days=1";
+      "&forecast_days=7";
     var aUrl = w.airUrl +
       "?latitude=" + w.lat + "&longitude=" + w.lon +
       "&current=pm10,pm2_5" +
@@ -1307,14 +1399,27 @@
     }).then(function (j) {
       var c = j.current || {};
       var d = (j.daily || {});
+      var week = [];
+      var dates = Array.isArray(d.time) ? d.time : [];
+      for (var i = 0; i < dates.length; i++) {
+        week.push({
+          date: dates[i],
+          code: (Array.isArray(d.weather_code) && d.weather_code[i] != null) ? d.weather_code[i] : null,
+          max: (Array.isArray(d.temperature_2m_max) && d.temperature_2m_max[i] != null) ? d.temperature_2m_max[i] : null,
+          min: (Array.isArray(d.temperature_2m_min) && d.temperature_2m_min[i] != null) ? d.temperature_2m_min[i] : null,
+          pop: (Array.isArray(d.precipitation_probability_max) && d.precipitation_probability_max[i] != null) ? Math.round(d.precipitation_probability_max[i]) : null
+        });
+      }
+      var first = week[0] || {};
       return {
         current: {
           temp: c.temperature_2m,
           code: c.weather_code,
           humidity: c.relative_humidity_2m
         },
-        min: d.temperature_2m_min && d.temperature_2m_min[0],
-        max: d.temperature_2m_max && d.temperature_2m_max[0],
+        min: (first.min != null) ? first.min : (d.temperature_2m_min && d.temperature_2m_min[0]),
+        max: (first.max != null) ? first.max : (d.temperature_2m_max && d.temperature_2m_max[0]),
+        week: week,
         fetchedAt: Date.now(),
         fetchedLabel: fmtTime(new Date().toISOString())
       };
@@ -1767,8 +1872,185 @@
   }
 
   /* =========================================================
-     공부 플랜 + 타이머
+     📖 공부 플랜 + 타이머 + 🎈 오늘의 퀴즈
      ========================================================= */
+
+  /* ---------- 🎈 오늘의 퀴즈 (다인이 눈높이 3문제) ---------- */
+  var QUIZ_PER_DAY = 3;
+  var quizWrong = {};        // 이 기기에서 방금 틀린 보기 — 저장하지 않아요
+  var quizHintOpen = {};     // 힌트를 펼쳐 둔 문제 — 저장하지 않아요
+
+  // 퀴즈 기록: { answered: { "YYYY-MM-DD|문제id": true }, rewarded: { "YYYY-MM-DD": true } }
+  function quizState() {
+    if (!state.quiz || typeof state.quiz !== "object" || Array.isArray(state.quiz)) {
+      state.quiz = { answered: {}, rewarded: {} };
+    }
+    if (!state.quiz.answered || typeof state.quiz.answered !== "object" || Array.isArray(state.quiz.answered)) state.quiz.answered = {};
+    if (!state.quiz.rewarded || typeof state.quiz.rewarded !== "object" || Array.isArray(state.quiz.rewarded)) state.quiz.rewarded = {};
+    return state.quiz;
+  }
+
+  function normalizeQuiz(raw) {
+    var src = (raw && typeof raw === "object") ? raw : {};
+    var out = { answered: {}, rewarded: {} };
+    var cutoff = Date.now() - 45 * DAY_MS;
+    function keepDay(day) {
+      if (!isDateKey(day)) return false;
+      var p = splitKey(day);
+      return Date.UTC(p.y, p.m, p.d) >= cutoff;
+    }
+    function copyBoolMap(v, keyDay) {
+      var res = {};
+      if (!v || typeof v !== "object" || Array.isArray(v)) return res;
+      Object.keys(v).forEach(function (k) {
+        if (!v[k]) return;
+        var day = keyDay(k);
+        if (!keepDay(day)) return;          // 오래된 퀴즈 기록은 정리(동기화 용량 아끼기)
+        res[String(k)] = true;
+      });
+      return res;
+    }
+    out.answered = copyBoolMap(src.answered, function (k) { return String(k).slice(0, 10); });
+    out.rewarded = copyBoolMap(src.rewarded, function (k) { return String(k); });
+    return out;
+  }
+
+  function quizBank() {
+    var bank = Array.isArray(window.KR_QUIZZES) ? window.KR_QUIZZES : [];
+    return bank.filter(function (q) {
+      return q && q.id && q.q && Array.isArray(q.options) && q.options.length >= 2 &&
+        typeof q.answer === "number" && q.answer >= 0 && q.answer < q.options.length;
+    });
+  }
+
+  // 날짜로 정해지는 순서 → 기기가 달라도 같은 날에는 같은 3문제가 나온다
+  function quizSeed(key) {
+    var p = splitKey(key);
+    return Math.floor(Date.UTC(p.y, p.m, p.d) / DAY_MS) * 2654435761 % 4294967296;
+  }
+
+  function quizRandom(seed) {
+    var s = (seed >>> 0) || 1;
+    return function () {
+      s = (s + 0x6D2B79F5) >>> 0;
+      var t = s;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function todayQuizzes(key) {
+    var day = key || todayKey();
+    var bank = quizBank();
+    if (!bank.length) return [];
+    var rnd = quizRandom(quizSeed(day));
+    var pool = bank.slice();
+    for (var i = pool.length - 1; i > 0; i--) {
+      var j = Math.floor(rnd() * (i + 1));
+      var tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
+    }
+    var picked = [];
+    var cats = {};
+    pool.forEach(function (q) {
+      if (picked.length >= QUIZ_PER_DAY || cats[q.cat]) return;
+      cats[q.cat] = true;
+      picked.push(q);
+    });
+    if (picked.length < QUIZ_PER_DAY) {
+      pool.forEach(function (q) {
+        if (picked.length >= QUIZ_PER_DAY || picked.indexOf(q) !== -1) return;
+        picked.push(q);
+      });
+    }
+    return picked;
+  }
+
+  function quizSolved(day, id) {
+    var qz = state.quiz;
+    return !!(qz && qz.answered && qz.answered[day + "|" + id]);
+  }
+
+  function quizSolvedList(day) {
+    return todayQuizzes(day).filter(function (q) { return quizSolved(day, q.id); });
+  }
+
+  function quizWrongFor(day, id) {
+    var out = {};
+    var prefix = day + "|" + id + "|";
+    Object.keys(quizWrong).forEach(function (k) {
+      if (k.indexOf(prefix) === 0) out[k.slice(prefix.length)] = true;
+    });
+    return out;
+  }
+
+  function quizCardHtml() {
+    var day = todayKey();
+    var list = todayQuizzes(day);
+    if (!list.length) return "";
+    var solved = quizSolvedList(day).length;
+    var allDone = solved >= list.length;
+    var gotStamp = !!(state.quiz && state.quiz.rewarded && state.quiz.rewarded[day]);
+
+    var stars = list.map(function (q) {
+      return '<i class="quiz-star' + (quizSolved(day, q.id) ? " is-on" : "") + '" aria-hidden="true">★</i>';
+    }).join("");
+
+    var rows = list.map(function (q, qi) {
+      var ok = quizSolved(day, q.id);
+      var wrongs = quizWrongFor(day, q.id);
+      var hintOn = !!quizHintOpen[day + "|" + q.id];
+      var opts = q.options.map(function (opt, idx) {
+        var cls = "quiz-opt";
+        if (ok && idx === q.answer) cls += " is-right";
+        if (wrongs[String(idx)]) cls += " is-wrong";
+        var mark = ["①", "②", "③", "④"][idx] || "•";
+        return '<button class="' + cls + '" type="button" data-action="quiz-pick" data-qid="' + esc(q.id) + '" data-idx="' + idx + '"' +
+          (ok ? " disabled" : "") + ' aria-label="' + esc(mark + " " + opt) + '">' +
+          '<span class="quiz-opt-mark" aria-hidden="true">' + mark + '</span>' +
+          '<span class="quiz-opt-txt">' + esc(opt) + '</span>' +
+          (ok && idx === q.answer ? '<span class="quiz-opt-ok" aria-hidden="true">✅</span>' : "") +
+          (wrongs[String(idx)] ? '<span class="quiz-opt-no" aria-hidden="true">✗</span>' : "") +
+        '</button>';
+      }).join("");
+
+      var foot;
+      if (ok) {
+        foot = '<p class="quiz-feed is-good">🎉 ' + esc(q.why || "정답이에요!") + '</p>';
+      } else if (hintOn) {
+        foot = '<p class="quiz-feed is-hint">💡 ' + esc(q.hint || "천천히 생각해 보세요") + '</p>' +
+          '<button class="btn btn-xs btn-ghost quiz-hint-btn" type="button" data-action="quiz-hint" data-qid="' + esc(q.id) + '">힌트 닫기</button>';
+      } else {
+        foot = '<button class="btn btn-xs btn-ghost quiz-hint-btn" type="button" data-action="quiz-hint" data-qid="' + esc(q.id) + '">💡 힌트</button>';
+      }
+
+      return '<div class="quiz-q' + (ok ? " is-solved" : "") + '" data-qid="' + esc(q.id) + '">' +
+        '<div class="quiz-q-head">' +
+          '<span class="quiz-no">' + (qi + 1) + '</span>' +
+          '<span class="quiz-cat">' + esc((q.emoji || "❓") + " " + (q.cat || "퀴즈")) + '</span>' +
+          (ok ? '<span class="quiz-ok">맞혔어요</span>' : '') +
+        '</div>' +
+        '<p class="quiz-ask">' + esc(q.q) + '</p>' +
+        '<div class="quiz-opts">' + opts + '</div>' +
+        foot +
+      '</div>';
+    }).join("");
+
+    return '<div class="card quiz-card">' +
+      '<div class="section-head"><div class="section-title"><span class="ico">🎈</span>오늘의 퀴즈</div>' +
+        '<span class="section-note">' + list.length + '문제 · 다인이 눈높이</span></div>' +
+      '<div class="quiz-top"><span class="quiz-stars">' + stars + '</span>' +
+        '<span class="quiz-score" id="quizScore">' + solved + ' / ' + list.length + ' 맞혔어요</span></div>' +
+      '<p class="quiz-howto">보기를 누르면 바로 채점해 줘요. 다 맞히면 도장 1개! 매일 새 문제가 나와요 🌷</p>' +
+      '<div class="quiz-list" id="quizList">' + rows + '</div>' +
+      '<p class="quiz-foot' + (allDone ? " is-done" : "") + '" id="quizFoot">' +
+        (allDone
+          ? (gotStamp ? "🎉 오늘의 퀴즈 완성! 도장 1개를 받았어요" : "🎉 세 문제 모두 맞혔어요 — 참 잘했어요!")
+          : "세 문제를 모두 맞히면 도장 1개! 천천히 풀어 봐요") +
+      '</p>' +
+    '</div>';
+  }
+
   function renderStudy() {
     var root = qs("#studyContent");
     if (!root) return;
@@ -1841,6 +2123,11 @@
         }).join("") : '<p class="muted" style="padding:6px 2px">아직 공부 계획이 없어요. + 공부 추가 로 첫 계획을 세워요!</p>') +
       '</div>';
     root.appendChild(listCard);
+
+    // 🎈 오늘의 퀴즈 — 매일 자동으로 나오는 3문제 (공부 추가 버튼과 별개로 함께 보여요)
+    var quizCard = el("div");
+    quizCard.innerHTML = quizCardHtml();
+    if (quizCard.firstChild) root.appendChild(quizCard.firstChild);
 
     var note = el("p", "muted center", "공부를 완료하면 체크 버튼을 눌러요 — 도장이 쏙쏙 쌓여요 🌸");
     note.style.fontSize = "12px";
@@ -2514,6 +2801,7 @@
 
   function buildAllowanceCalendarCard() {
     ensureAllowView();
+    ensureHolidayYear(ALLOW_VIEW.y);
     var today = todayKey();
     var cells = monthCells(ALLOW_VIEW.y, ALLOW_VIEW.m);
     while (cells.length > 7 && cells.slice(-7).every(function (c) { return !c.inMonth; })) {
@@ -2534,18 +2822,21 @@
       var earned = routineDayEarned(c.key);
       var spent = routineSpentOn(c.key);
       var bonus = earned > 0 && routineDayBonus(c.key);
+      var hol = holidayName(c.key);
       var cls = "acal-cell" + (c.inMonth ? "" : " is-out") +
         (c.key === today ? " is-today" : "") +
         (c.key === sel ? " is-selected" : "") +
-        (earned > 0 ? " has-earn" : "") + (spent > 0 ? " has-spend" : "");
+        (earned > 0 ? " has-earn" : "") + (spent > 0 ? " has-spend" : "") + (hol ? " is-hol" : "");
       var label = fmtDayLabel(c.key) +
+        (hol ? " · " + hol + " 공휴일" : "") +
         (earned > 0 ? " · 적립 " + fmtWon(earned) : "") +
         (bonus ? " (모두 완료 보너스 포함)" : "") +
         (spent > 0 ? " · 사용 " + fmtWon(spent) : "");
       return '<button class="' + cls + '" type="button" data-action="allow-pick" data-date="' + esc(c.key) + '"' +
         ' aria-pressed="' + (c.key === sel ? "true" : "false") + '"' +
+        (hol ? ' title="' + esc(hol) + '"' : '') +
         ' aria-label="' + esc(label) + '">' +
-        '<span class="acal-num">' + c.day + (bonus ? '<i class="acal-bonus" aria-hidden="true">🎁</i>' : '') + '</span>' +
+        '<span class="acal-num' + (hol ? " is-hol" : "") + '">' + c.day + (bonus ? '<i class="acal-bonus" aria-hidden="true">🎁</i>' : '') + '</span>' +
         (earned > 0 ? '<span class="acal-earn">+' + allowAmountText(earned) + '원</span>' : '') +
         (spent > 0 ? '<span class="acal-spend">-' + allowAmountText(spent) + '원</span>' : '') +
       '</button>';
@@ -2559,6 +2850,8 @@
     var selNames = routineItems().filter(function (it) { return selChecked[it.id]; })
       .map(function (it) { return it.name; });
     var selParts = [];
+    var selHol = holidayName(sel);
+    if (selHol) selParts.push("🎉 " + selHol);
     if (selEarned > 0) selParts.push("적립 " + fmtWon(selEarned) + (selBonus ? " (보너스 포함)" : ""));
     if (selSpent > 0) selParts.push("사용 " + fmtWon(selSpent));
     if (!selParts.length) selParts.push("적립·사용 없음");
@@ -2732,6 +3025,7 @@
 
   function renderTogetherCalendar(root) {
     root.innerHTML = "";
+    ensureHolidayYear(calView.y);
     var byDay = {};
     allEvents().forEach(function (e) {
       if (!byDay[e.date]) byDay[e.date] = [];
@@ -2757,29 +3051,33 @@
       }).join("") + '</div>' +
       '<div class="cal-grid" id="calGrid">' + cells.map(function (c) {
         var evs = byDay[c.key] || [];
+        var hol = holidayName(c.key);
         var cls = "cal-cell" + (c.inMonth ? "" : " is-out") +
           (c.key === today ? " is-today" : "") +
           (c.key === sel ? " is-selected" : "") +
-          (evs.length ? " has-events" : "");
+          (evs.length ? " has-events" : "") + (hol ? " is-hol" : "");
         var dots = evs.slice(0, 3).map(function (e) {
           return '<i class="cal-dot who-' + esc(e.who || "all") + '"></i>';
         }).join("");
         return '<button class="' + cls + '" type="button" data-action="cal-pick" data-date="' + esc(c.key) + '"' +
           ' aria-pressed="' + (c.key === sel ? "true" : "false") + '"' +
-          ' aria-label="' + esc(fmtDayLabel(c.key) + (evs.length ? " · 일정 " + evs.length + "개" : "")) + '">' +
-          '<span class="cal-num">' + c.day + '</span>' +
+          ' aria-label="' + esc(fmtDayLabel(c.key) + (hol ? " · " + hol + " 공휴일" : "") + (evs.length ? " · 일정 " + evs.length + "개" : "")) + '"' +
+          (hol ? ' title="' + esc(hol) + '"' : '') + '>' +
+          '<span class="cal-num' + (hol ? " is-hol" : "") + '">' + c.day + '</span>' +
           '<span class="cal-dots">' + dots + '</span>' +
           (evs.length > 3 ? '<span class="cal-more">+' + (evs.length - 3) + '</span>' : "") +
         '</button>';
       }).join("") + '</div>' +
-      '<p class="cal-legend">🏡 가족 모두 · 🎀 다인이 · 💐 엄마 · 🧢 아빠</p>';
+      '<p class="cal-legend">🏡 가족 모두 · 🎀 다인이 · 💐 엄마 · 🧢 아빠 · <b class="hol-legend">빨간 날 = 공휴일</b></p>';
     root.appendChild(calCard);
 
     var dayCard = el("div", "card");
     var dayEvents = eventsOn(sel);
+    var selHol = holidayName(sel);
     dayCard.innerHTML =
       '<div class="section-head"><div class="section-title"><span class="ico">📌</span>' + esc(fmtDayLabel(sel)) + '</div>' +
         '<button class="btn btn-xs btn-primary" type="button" data-action="add-event" data-date="' + esc(sel) + '">+ 일정 추가</button></div>' +
+      (selHol ? '<p class="day-holiday">🎉 <b>' + esc(selHol) + '</b> · 빨간 날이예요</p>' : "") +
       '<div class="day-events" id="dayEvents">' +
         (dayEvents.length ? dayEvents.map(eventRowHtml).join("") :
           '<p class="muted" style="padding:4px 2px">이 날은 아직 일정이 없어요. 가족과 함께 넣어 봐요 🌿</p>') +
@@ -3014,6 +3312,7 @@
   function homeCalendarCardHtml() {
     var today = todayKey();
     var p = splitKey(today);
+    ensureHolidayYear(p.y);
 
     // 이번 달 마지막 주까지만 남겨 6주 → 보통 5주로 줄인다
     var cells = monthCells(p.y, p.m);
@@ -3034,17 +3333,26 @@
 
     var cellHtml = cells.map(function (c) {
       var evs = byDay[c.key] || [];
+      var hol = holidayName(c.key);
       var dots = evs.slice(0, 3).map(function (e) {
         return '<i class="hcal-dot who-' + esc(e.who || "all") + '"></i>';
       }).join("");
       var cls = "hcal-cell" + (c.inMonth ? "" : " is-out") +
-        (c.key === today ? " is-today" : "") + (evs.length ? " has-events" : "");
+        (c.key === today ? " is-today" : "") + (evs.length ? " has-events" : "") + (hol ? " is-hol" : "");
       return '<button class="' + cls + '" type="button" data-action="home-cal-day" data-date="' + esc(c.key) + '"' +
-        ' aria-label="' + esc(fmtDayLabel(c.key) + (evs.length ? " · 일정 " + evs.length + "개" : "")) + '">' +
-        '<span class="hcal-num">' + c.day + '</span>' +
+        ' aria-label="' + esc(fmtDayLabel(c.key) + (hol ? " · " + hol + " 공휴일" : "") + (evs.length ? " · 일정 " + evs.length + "개" : "")) + '"' +
+        (hol ? ' title="' + esc(hol) + '"' : '') + '>' +
+        '<span class="hcal-num' + (hol ? " is-hol" : "") + '">' + c.day + '</span>' +
         '<span class="hcal-dots">' + dots + '</span>' +
       '</button>';
     }).join("");
+
+    var mHols = holidaysInMonth(p.y, p.m);
+    var holLine = mHols.length
+      ? '<p class="hcal-hols"><b>🎉 이번 달 빨간 날</b> ' + mHols.slice(0, 6).map(function (h) {
+          return h.day + '일 ' + esc(h.name);
+        }).join(' · ') + (mHols.length > 6 ? ' 외 ' + (mHols.length - 6) + '일' : '') + '</p>'
+      : '';
 
     var upcoming = allEvents().filter(function (e) { return e.date >= today; }).sort(function (a, b) {
       if (a.date !== b.date) return a.date < b.date ? -1 : 1;
@@ -3073,6 +3381,7 @@
         '<span><i class="hcal-dot who-mom"></i>엄마</span>' +
         '<span><i class="hcal-dot who-dad"></i>아빠</span>' +
       '</div>' +
+      holLine +
       '<p class="hcal-up-title">다가오는 일정</p>' +
       '<div class="mini-list hcal-up">' + upRows + '</div>' +
     '</div>';
@@ -4162,6 +4471,42 @@
           markDeleted("study", id);
           persist(); renderAll();
         });
+        break;
+      }
+      /* 📖 오늘의 퀴즈 */
+      case "quiz-pick": {
+        var qDay = todayKey();
+        var qId = btn.getAttribute("data-qid");
+        var qIdx = Number(btn.getAttribute("data-idx"));
+        var qItem = todayQuizzes(qDay).filter(function (x) { return x.id === qId; })[0];
+        if (!qItem || quizSolved(qDay, qId)) break;
+        var qKey = qDay + "|" + qId;
+        if (qIdx === qItem.answer) {
+          quizState().answered[qKey] = true;
+          Object.keys(quizWrong).forEach(function (k) { if (k.indexOf(qKey + "|") === 0) delete quizWrong[k]; });
+          quizHintOpen[qKey] = false;
+          petAward("quiz:" + qKey, PET_XP.study);
+          petCheckLevel();
+          var solvedNow = quizSolvedList(qDay).length;
+          if (solvedNow >= todayQuizzes(qDay).length && !quizState().rewarded[qDay]) {
+            quizState().rewarded[qDay] = true;
+            addStamps(1, "오늘의 퀴즈를 모두 맞혔어요!");
+          } else {
+            persist();
+            renderStudy();
+            toast("정답! " + (qItem.cheer || "참 잘했어요 🎉"), "🎈");
+          }
+        } else {
+          quizWrong[qKey + "|" + qIdx] = true;
+          renderStudy();
+          toast("앗, 다시 생각해 볼까요? 💭", "🤔");
+        }
+        break;
+      }
+      case "quiz-hint": {
+        var qhKey = todayKey() + "|" + btn.getAttribute("data-qid");
+        quizHintOpen[qhKey] = !quizHintOpen[qhKey];
+        renderStudy();
         break;
       }
       case "toggle-study": {

@@ -149,6 +149,8 @@
     switch (path) {
       case "pet": return mergePet(base, local, remote, ctx);
       case "stamps": return mergeMaxMap(base, local, remote);
+      case "quiz.answered":
+      case "quiz.rewarded": return mergeBoolMap(base, local, remote);
       case "badges":
       case "dex.unlocked":
       case "dex.seen":

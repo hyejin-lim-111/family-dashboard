@@ -2493,3 +2493,159 @@ body.alarm-on { overflow: hidden; }
   .hp-txt b { font-size: 15px; }
   .hp-txt span { font-size: 11.5px; }
 }
+
+/* =========================================================
+   2026-11-17 추가 — 📅 공휴일 빨간 날 · 🌤️ 주간 날씨 · 🎈 오늘의 퀴즈
+   ========================================================= */
+
+/* ---------- 공휴일(빨간 날) ---------- */
+.cal-cell .cal-num.is-hol,
+.hcal-cell .hcal-num.is-hol,
+.acal-cell .acal-num.is-hol,
+.acal-cell .acal-num.is-hol i { color: #E04B62; }
+
+.cal-cell.is-hol .cal-num,
+.hcal-cell.is-hol .hcal-num,
+.acal-cell.is-hol .acal-num { font-weight: 800; }
+
+.cal-cell.is-hol:not(.is-selected):not(.is-today) { background: #FFF6F7; border-color: #FBDFE4; }
+.hcal-cell.is-hol:not(.is-today) { background: #FFF6F7; }
+.acal-cell.is-hol:not(.is-today):not(.is-selected) { background: #FFF6F7; border-color: #FBDFE4; }
+
+.cal-cell.is-out .cal-num.is-hol,
+.hcal-cell.is-out .hcal-num.is-hol,
+.acal-cell.is-out .acal-num.is-hol { color: #E9A7B1; }
+
+.hcal-hols {
+  margin: 9px 2px 0;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: #FFF6F7;
+  border: 1px solid #FBDFE4;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #A8576B;
+}
+.hcal-hols b { color: #C2445B; }
+
+.cal-legend .hol-legend { color: #C2445B; font-weight: 700; }
+
+.day-holiday {
+  margin: 10px 0 2px;
+  padding: 9px 12px;
+  border-radius: 14px;
+  background: #FFF6F7;
+  border: 1px solid #FBDFE4;
+  font-size: 12.5px;
+  color: #A8576B;
+}
+.day-holiday b { color: #C2445B; font-family: var(--font-title); }
+
+/* ---------- 🌤️ 주간 날씨 (날씨 카드 안) ---------- */
+.week-strip {
+  margin-top: 14px;
+  padding: 9px 8px 7px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid #F7E6D4;
+}
+.wk-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 0 2px 6px; }
+.wk-title { font-size: 11.5px; font-weight: 700; color: #B4772F; }
+.wk-legend { font-size: 9.5px; color: var(--ink-faint); white-space: nowrap; }
+.wk-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
+.wk-day {
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  padding: 4px 0 3px;
+  border-radius: 10px;
+  min-width: 0;
+}
+.wk-day.is-today { background: #FFF0F5; box-shadow: inset 0 0 0 1.5px #F5B9CD; }
+.wk-dow { font-size: 10px; color: var(--ink-faint); white-space: nowrap; }
+.wk-day.is-today .wk-dow { color: #C2557C; font-weight: 800; }
+.wk-ico { font-size: 15px; line-height: 1.15; }
+.wk-max { font-family: var(--font-num); font-size: 11.5px; font-weight: 700; color: #4A3B34; line-height: 1.15; }
+.wk-min { font-family: var(--font-num); font-size: 10.5px; color: var(--ink-faint); line-height: 1.15; }
+.wk-pop { font-size: 9.5px; color: #3D7EBF; line-height: 1.15; white-space: nowrap; }
+.wk-pop.is-none { visibility: hidden; }
+
+/* ---------- 🎈 오늘의 퀴즈 ---------- */
+.quiz-card { border: 1.5px solid #FFE1C9; }
+.quiz-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; }
+.quiz-stars { display: inline-flex; gap: 4px; font-size: 15px; color: #EBD9C6; }
+.quiz-star.is-on { color: #F7B731; text-shadow: 0 2px 6px rgba(247, 183, 49, 0.35); }
+.quiz-score { font-family: var(--font-num); font-size: 12px; color: var(--ink-faint); }
+.quiz-howto { margin: 6px 0 0; font-size: 11.5px; color: var(--ink-faint); }
+.quiz-list { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.quiz-q {
+  padding: 12px 13px 11px;
+  border-radius: 18px;
+  background: #FFFDFA;
+  border: 1.5px solid #F3E4D3;
+}
+.quiz-q.is-solved { background: #F6FCF6; border-color: #CDEBD6; }
+.quiz-q-head { display: flex; align-items: center; gap: 7px; }
+.quiz-no {
+  width: 20px; height: 20px; flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  background: var(--purple-soft); color: #6C4FA8;
+  font-family: var(--font-num); font-size: 11.5px; font-weight: 700;
+}
+.quiz-cat { font-size: 11.5px; color: var(--ink-faint); }
+.quiz-ok { margin-left: auto; font-size: 11px; font-weight: 700; color: var(--good); }
+.quiz-ask { margin: 7px 0 9px; font-family: var(--font-title); font-size: 15px; line-height: 1.4; color: var(--ink); }
+.quiz-opts { display: flex; flex-direction: column; gap: 6px; }
+.quiz-opt {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%;
+  padding: 11px 12px;
+  border-radius: 14px;
+  border: 1.5px solid #F0E0CF;
+  background: #fff;
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 14px;
+  text-align: left;
+  transition: transform 0.12s ease, background 0.15s ease, border-color 0.15s ease;
+}
+.quiz-opt:active { transform: scale(0.98); }
+.quiz-opt-mark { flex: 0 0 auto; font-size: 13px; color: #B9A493; }
+.quiz-opt-txt { flex: 1 1 auto; min-width: 0; }
+.quiz-opt.is-wrong { background: #FFF1EF; border-color: #F7CEC4; color: #A24B39; }
+.quiz-opt.is-wrong .quiz-opt-txt { text-decoration: line-through; text-decoration-color: #E5B6AC; }
+.quiz-opt.is-right { background: #EFFAF2; border-color: #9CD5AC; color: #2F7A4B; font-weight: 700; }
+.quiz-opt[disabled] { cursor: default; }
+.quiz-opt-no { color: #C9573F; font-weight: 800; }
+.quiz-opt-ok { font-size: 13px; }
+.quiz-feed { margin: 9px 0 0; font-size: 12.5px; line-height: 1.5; }
+.quiz-feed.is-good { color: #2F7A4B; }
+.quiz-feed.is-hint { color: #96631C; }
+.quiz-hint-btn { margin-top: 8px; }
+.quiz-foot {
+  margin: 12px 0 0;
+  padding: 9px 12px;
+  border-radius: 14px;
+  background: #FFF8EA;
+  border: 1px solid #F6E3BE;
+  font-size: 11.5px;
+  color: #8A5A2B;
+  text-align: center;
+}
+.quiz-foot.is-done { background: #F6FCF6; border-color: #CDEBD6; color: #2F7A4B; font-weight: 700; }
+
+/* 태블릿 넓은 화면에서는 문제를 3열로 펼쳐 한눈에 */
+@media (min-width: 720px) {
+  .quiz-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; align-items: start; }
+  .quiz-ask { font-size: 14.5px; }
+}
+
+@media (max-width: 380px) {
+  .wk-ico { font-size: 13px; }
+  .wk-dow { font-size: 9px; }
+  .wk-max { font-size: 10.5px; }
+  .wk-min { font-size: 9.5px; }
+  .wk-pop { font-size: 8.5px; }
+  .wk-legend { display: none; }
+  .quiz-ask { font-size: 14px; }
+  .quiz-opt { font-size: 13.5px; padding: 10px 11px; }
+}
