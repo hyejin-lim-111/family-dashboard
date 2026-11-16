@@ -195,6 +195,14 @@ console.log("\n[10] 🐣 내 캐릭터 키우기 (도감 탭 교체)");
   check("태블릿 2열 배치", /#petContent\s*\{[^}]*grid-template-columns/.test(css) && /#petHero \{ grid-column: 1; grid-row: 1/.test(css) && /#petStageCard \{ grid-column: 1 \/ -1/.test(css));
 }
 
+console.log("\n[11] 채팅 메시지 삭제");
+{
+  check("메시지마다 삭제 동작", /data-action="del-chat"/.test(app) && /case "del-chat"/.test(app) && /function deleteChat\(/.test(app));
+  check("삭제 전 확인 창", /function deleteChat\([\s\S]{0,900}confirmModal\(/.test(app) && /function deleteChat\([\s\S]{0,900}markDeleted\("chat"/.test(app));
+  check("삭제 버튼 스타일(누르기 좋은 크기)", /\.msg-del\s*\{[^}]*width:\s*26px/.test(css) && /\.msg-del\s*\{[^}]*height:\s*26px/.test(css));
+  check("store 가 deleted.chat 을 병합·제거에 사용", /"chat"[^\n]*TOMBSTONE_KEYS|TOMBSTONE_KEYS = \[[^\]]*"chat"/.test(read("store.js")) && /payload\.chat = purge\(payload\.chat, d\.chat\)/.test(read("store.js")));
+}
+
 console.log("\n================================");
 if (failures) { console.log("FAILED: " + failures + " checks"); process.exit(1); }
 console.log("ALL STATIC CHECKS PASSED ✅");

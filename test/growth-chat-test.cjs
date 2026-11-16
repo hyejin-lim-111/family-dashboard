@@ -261,6 +261,42 @@ const basePayload = {
     return ok;
   })());
 
+  console.log("\n[9] 채팅 — 메시지·사진 삭제 버튼");
+  check("채팅 탭", activeView() === "chat");
+  const msgEls = $$("#chatList .msg");
+  check("메시지마다 삭제 버튼", msgEls.length > 0 && msgEls.every((m) => !!m.querySelector('.msg-del[data-action="del-chat"]')),
+    msgEls.length + "개 중 " + $$('#chatList .msg-del[data-action="del-chat"]').length + "개");
+
+  async function tryDelete(elm, confirm) {
+    const id = elm.querySelector('.msg-del').getAttribute("data-id");
+    click(elm.querySelector(".msg-del"));
+    await sleep(150);
+    const asked = $("#modalRoot").hidden === false && $("#modalBox").textContent.includes("지울까요");
+    click(confirm ? $("#confirmOkBtn") : $("#modalBox [data-action='close-modal']"));
+    await sleep(300);
+    return { id, asked };
+  }
+
+  const photoEl = $$("#chatList .msg").find((m) => m.querySelector(".msg-photo"));
+  check("사진 메시지 있음", !!photoEl);
+  if (photoEl) {
+    const first = await tryDelete(photoEl, false);
+    check("삭제 전 확인 창", first.asked);
+    check("취소하면 메시지 그대로", saved().chat.some((m) => m.id === first.id), first.id);
+    const again = await tryDelete($$("#chatList .msg").find((m) => m.querySelector('.msg-del') && m.querySelector('.msg-del').getAttribute("data-id") === first.id), true);
+    check("확인하면 사진 메시지 삭제", !saved().chat.some((m) => m.id === again.id), again.id);
+    check("지운 사진 tombstone 기록", !!(saved().deleted && saved().deleted.chat && saved().deleted.chat[again.id]), JSON.stringify(saved().deleted));
+    check("화면에서도 사라짐", !$('#chatList .msg-del[data-id="' + again.id + '"]'));
+    check("사진 없이도 다른 메시지 유지", saved().chat.length > 0, String(saved().chat.length));
+  }
+
+  const textEl = $$("#chatList .msg").find((m) => m.querySelector(".quick-bubble"));
+  if (textEl) {
+    const res = await tryDelete(textEl, true);
+    check("말판 메시지도 삭제", !saved().chat.some((m) => m.id === res.id), res.id);
+    check("말판 메시지 tombstone", !!(saved().deleted.chat && saved().deleted.chat[res.id]));
+  }
+
   console.log("\n================================ ");
   if (failures) { console.log("FAILED: " + failures + " checks"); process.exit(1); }
   console.log("ALL GROWTH/CHAT CHECKS PASSED ✅");

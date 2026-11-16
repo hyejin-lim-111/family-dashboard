@@ -299,7 +299,45 @@ const ids = (list) => (Array.isArray(list) ? list.map((x) => x.id) : []).join(",
   }
 
   /* ---------------- ② 두 기기 실제 흐름 ---------------- */
-  console.log("\n[9] 기기 A(오래 열어 둔 태블릿) · 기기 B(폰) — 가짜 Supabase 서버");
+  console.log("\n[9] 채팅 메시지 삭제 — 지운 메시지는 어느 기기에서도 되살아나지 않는다");
+  {
+    const base = baseState({ chat: [msg("m1", "dain", "잘 잤어요", T1), msg("m2", "mom", "보고 싶어요", T2)] });
+    const local = clone(base);
+    local.chat = local.chat.filter((m) => m.id !== "m2");
+    local.deleted = { chat: { m2: T3 } };
+    local.updatedAt = T3;
+    const res = merge(base, local, clone(base));
+    check("지운 채팅은 병합에서도 빠짐", ids(res.payload.chat) === "m1", ids(res.payload.chat));
+    check("지운 표시(deleted.chat)가 남음", !!(res.payload.deleted && res.payload.deleted.chat && res.payload.deleted.chat.m2),
+      JSON.stringify(res.payload.deleted));
+
+    // 오래 열어 둔 기기가 옛 복사본(m2 있음)을 들고 다른 일을 저장해도 m2 가 돌아오지 않는다
+    const stale = clone(base);
+    stale.chat.push(msg("m3", "dad", "늦어요", T3));
+    stale.updatedAt = "2026-11-16T13:00:00.000Z";
+    const res2 = merge(base, stale, res.payload, { maxChat: 200 });
+    check("오래된 기기가 저장해도 지운 채팅이 되살아나지 않음", ids(res2.payload.chat) === "m1,m3", ids(res2.payload.chat));
+    check("그 기기의 새 채팅은 그대로 올라감", res2.payload.chat[1].text === "늦어요", JSON.stringify(res2.payload.chat.map((m) => m.text)));
+
+    // 사진만 있던 메시지도 통째로 지우고 tombstone 을 남긴다
+    const baseP = baseState({ chat: [msg("m1", "dain", "잘 잤어요", T1),
+      { id: "p1", from: "dain", fromName: "다인이", kind: "photo", imageData: "data:image/jpeg;base64,AAAA", w: 720, h: 540, at: T2, heart: false }] });
+    const localP = clone(baseP);
+    localP.chat = localP.chat.filter((m) => m.id !== "p1");
+    localP.deleted = { chat: { p1: T3 } };
+    localP.updatedAt = T3;
+    const resP = merge(baseP, localP, clone(baseP));
+    check("지운 사진 메시지가 남지 않음", ids(resP.payload.chat) === "m1", ids(resP.payload.chat));
+    check("사진 메시지 tombstone 기록", !!(resP.payload.deleted.chat && resP.payload.deleted.chat.p1));
+
+    // 기준 상태 없이 병합해도 tombstone 에 있는 채팅은 빠진다
+    const only = baseState({ deleted: { chat: { mX: T3 } }, chat: [msg("mX", "mom", "지운 메시지", T1), msg("mY", "dad", "남는 메시지", T2)] });
+    only.updatedAt = T3;
+    const resO = merge(null, only, baseState());
+    check("tombstone 만 있어도 지운 채팅 제외", ids(resO.payload.chat) === "mY", ids(resO.payload.chat));
+  }
+
+  console.log("\n[10] 기기 A(오래 열어 둔 태블릿) · 기기 B(폰) — 가짜 Supabase 서버");
   (async function () {
     const server = { payload: baseState({ chat: [msg("m1", "dain", "잘 잤어요", T1)] }), updated_at: T1 };
     function makeDevice(name, pollMs) {
@@ -395,6 +433,20 @@ const ids = (list) => (Array.isArray(list) ? list.map((x) => x.id) : []).join(",
     await sleep(250);
     check("다른 기기 채팅이 실시간으로 합쳐짐", !!got && got.chat.length === before + 1, got && String(got.chat.length));
     check("받는 쪽이 하던 일도 그대로", (C.state.todos.dain || []).some((t) => t.id === "t-c"), JSON.stringify(C.state.todos.dain));
+
+    // B(폰): 채팅 한 줄 삭제 → A(옛 복사본)가 나중에 저장해도 되살아나지 않는다
+    const dropId = server.payload.chat[0].id;
+    B.state.chat = B.state.chat.filter((m) => m.id !== dropId);
+    B.state.deleted = Object.assign({}, B.state.deleted, { chat: Object.assign({}, B.state.deleted.chat, { [dropId]: "2026-11-16T12:40:00.000Z" }) });
+    B.state.updatedAt = "2026-11-16T12:40:00.000Z";
+    await B.store.save(B.state);
+    check("B 가 지운 채팅이 서버에서 사라짐", !server.payload.chat.some((m) => m.id === dropId), ids(server.payload.chat));
+
+    A.state.chat.push(msg("m-a-late", "dad", "이제 자자", "2026-11-16T12:41:00.000Z"));
+    A.state.updatedAt = "2026-11-16T12:41:00.000Z";
+    await A.store.save(A.state);
+    check("A 의 옛 복사본이 지운 채팅을 되살리지 않음", !server.payload.chat.some((m) => m.id === dropId), ids(server.payload.chat));
+    check("A 의 새 채팅은 그대로 남음", server.payload.chat.some((m) => m.id === "m-a-late"), ids(server.payload.chat));
 
     A.store.destroy();
     B.store.destroy();

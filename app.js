@@ -3188,7 +3188,8 @@
         body +
         '<span class="msg-time">' + esc(fmtTime(msg.at)) + '</span>' +
         '<span class="heart-row"><button type="button" class="heart-btn' + (msg.heart ? " is-on" : "") + '" data-action="heart" data-id="' + esc(msg.id) + '">💗' +
-          (msg.heart ? '<b>1</b>' : "") + '</button></span>' +
+          (msg.heart ? '<b>1</b>' : "") + '</button>' +
+          '<button type="button" class="msg-del" data-action="del-chat" data-id="' + esc(msg.id) + '" aria-label="이 메시지 지우기" title="이 메시지 지우기">✕</button></span>' +
       '</div>';
     return wrap;
   }
@@ -3204,6 +3205,22 @@
       photos[i].imageData = "";
       photos[i].photoTrimmed = true;
     }
+  }
+
+  // 채팅 한 줄 지우기 — 지운 표시(tombstone)를 남겨 다른 기기에서도 되살아나지 않게 한다
+  function deleteChat(id) {
+    var msg = (state.chat || []).find(function (m) { return m.id === id; });
+    if (!msg) return;
+    var kindLabel = msg.kind === "photo" ? "사진" : msg.kind === "voice" ? "음성 메시지" :
+      msg.kind === "sticker" ? "스티커" : msg.kind === "quick" ? "말판 메시지" : "메시지";
+    var what = msg.text ? "『" + msg.text + "』 " + kindLabel : kindLabel;
+    confirmModal("메시지 지우기", memberName(msg.from) + "의 " + what + "를 지울까요? 가족 모두의 화면에서 함께 사라져요.", "지우기", function () {
+      state.chat = (state.chat || []).filter(function (m) { return m.id !== id; });
+      markDeleted("chat", id);
+      persist(true);
+      renderChat();
+      toast("메시지를 지웠어요", "🗑️");
+    });
   }
 
   function sendChat(payload) {
@@ -4278,6 +4295,7 @@
         qs("#stickerSheet").hidden = true;
         toast("스티커를 보냈어요", "🎀");
         break;
+      case "del-chat": deleteChat(id); break;
       case "heart": {
         var msg = (state.chat || []).find(function (m) { return m.id === id; });
         if (!msg) return;
