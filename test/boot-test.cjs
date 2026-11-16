@@ -199,6 +199,15 @@ function check(name, cond, extra) {
   check("스티커 전송", !!$(".sticker-bubble"));
   const st6 = JSON.parse(window.localStorage.getItem("family-dashboard.state.v1")).payload;
   check("채팅 2건 저장(텍스트+스티커, 하트는 반응)", st6.chat.length === 2, "got " + st6.chat.length);
+  check("말판 버튼 14종", $$("#quickGrid .quick-btn").length === 14, "got " + $$("#quickGrid .quick-btn").length);
+  check("말판을 누르면 바로 전송", (function () {
+    const btn = $$("#quickGrid .quick-btn")[4];
+    const label = btn.getAttribute("data-label");
+    click(btn);
+    const last = JSON.parse(window.localStorage.getItem("family-dashboard.state.v1")).payload.chat.slice(-1)[0];
+    return last.kind === "quick" && last.text === label && !!$(".quick-bubble");
+  })(), $("#chatList").textContent.slice(0, 80));
+  check("사진 올리기 버튼·파일 입력", !!$('[data-action="pick-photo"]') && !!$("#chatPhotoInput"));
 
   console.log("\n[9] 설정·잠금·동기화 모드");
   click($('[data-action="open-settings"]'));
@@ -230,7 +239,7 @@ function check(name, cond, extra) {
   click($('.tab-btn[data-tab="together"]'));
   await sleep(60);
   check("함께 탭 활성", active() === "together");
-  check("하단 탭 6개", $$(".tab-btn").length === 6, "got " + $$(".tab-btn").length);
+  check("하단 탭 7개", $$(".tab-btn").length === 7, "got " + $$(".tab-btn").length);
   check("기본 화면은 달력", $("#togetherContent").getAttribute("data-sub") === "calendar");
   check("달력 42칸", $$(".cal-cell").length === 42, "got " + $$(".cal-cell").length);
   check("요일 머리글 7개", $$(".cal-dow span").length === 7);

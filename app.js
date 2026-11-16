@@ -8,6 +8,7 @@
 
   var CFG = window.FAMILY_CONFIG;
   var Store = window.FamilyStore;
+  var GROWTH_LMS = window.GROWTH_LMS || null;
 
   /* ---------- 상수 ---------- */
   var DAY_MS = 24 * 60 * 60 * 1000;
@@ -171,6 +172,24 @@
     { id: "st_cloud",  label: "구름솜",   img: "assets/fairy_cloud.png?v=20261116" },
     { id: "st_berry",  label: "딸기맛",   img: "assets/fairy_berry.png?v=20261116" },
     { id: "st_rainbow", label: "무지개",  img: "assets/fairy_rainbow.png?v=20261116" }
+  ];
+
+  /* ---------- 다인이 말판 (키보드 없이 한 번에 보내는 기본 메시지) ---------- */
+  var QUICK_MESSAGES = [
+    { id: "q-wake",  emoji: "🌞", label: "잘 잤어요" },
+    { id: "q-poop",  emoji: "💩", label: "응가 했어요" },
+    { id: "q-come",  emoji: "🏠", label: "빨리 오세요" },
+    { id: "q-where", emoji: "📍", label: "어디에요?" },
+    { id: "q-love",  emoji: "😍", label: "사랑해요" },
+    { id: "q-miss",  emoji: "🥺", label: "보고 싶어요" },
+    { id: "q-snack", emoji: "🍪", label: "과자 먹고 싶어요" },
+    { id: "q-night", emoji: "🌙", label: "안녕히 주무세요" },
+    { id: "q-tv",    emoji: "📺", label: "TV 봐도 돼요?" },
+    { id: "q-home",  emoji: "📚", label: "숙제 다 했어요" },
+    { id: "q-sick",  emoji: "🩹", label: "아파요" },
+    { id: "q-call",  emoji: "📞", label: "전화해 주세요" },
+    { id: "q-help",  emoji: "🙋", label: "도와주세요" },
+    { id: "q-school", emoji: "🏫", label: "유치원 갔다올게요" }
   ];
 
   var DOW_KO = ["일", "월", "화", "수", "목", "금", "토"];
@@ -414,6 +433,147 @@
     toast._timer = setTimeout(function () { t.hidden = true; }, 2400);
   }
 
+  /* =========================================================
+     다인이 키·몸무게 (2017 소아청소년 성장도표 여아)
+     ========================================================= */
+  var GROWTH_BIRTH = "2021-02-16";       // 다인이 생일
+  var GROWTH_LABEL = "다인이";
+  var GROWTH_PCTS = [3, 10, 25, 50, 75, 90, 97];
+  var GROWTH_Z = { 3: -1.880794, 10: -1.281552, 25: -0.674490, 50: 0, 75: 0.674490, 90: 1.281552, 97: 1.880794 };
+
+  function dateParts(key) {
+    var p = String(key || "").split("-");
+    return { y: Number(p[0]), m: Number(p[1]), d: Number(p[2]) };
+  }
+
+  function dayNumber(key) {
+    var p = dateParts(key);
+    if (!p.y || !p.m || !p.d) return NaN;
+    return Date.UTC(p.y, p.m - 1, p.d) / 86400000;
+  }
+
+  // 생일~기준일 만 개월 (기준일의 일이 생일의 일보다 작으면 1개월을 뺀다)
+  function monthsBetween(birthKey, refKey) {
+    var b = dateParts(birthKey), r = dateParts(refKey);
+    if (!b.y || !r.y) return 0;
+    var m = (r.y - b.y) * 12 + (r.m - b.m) - (r.d < b.d ? 1 : 0);
+    return Math.max(0, m);
+  }
+
+  function ageText(months) {
+    var y = Math.floor(months / 12), m = months % 12;
+    return "만 " + y + "살" + (m ? " " + m + "개월" : "");
+  }
+
+  // 출생일을 1일째로 센다 (2021-02-16 → 1일째). D+는 출생일을 0으로 센다.
+  function bornDays(birthKey, refKey) {
+    var diff = dayNumber(refKey) - dayNumber(birthKey);
+    if (isNaN(diff)) return 1;
+    return Math.floor(diff) + 1;
+  }
+
+  function nextBirthdayInfo(birthKey, refKey) {
+    var b = dateParts(birthKey), r = dateParts(refKey);
+    var thisYear = Date.UTC(r.y, b.m - 1, b.d) / 86400000;
+    var today = dayNumber(refKey);
+    var target = thisYear >= today ? thisYear : Date.UTC(r.y + 1, b.m - 1, b.d) / 86400000;
+    var left = Math.round(target - today);
+    var age = (r.y + (thisYear >= today ? 0 : 1)) - b.y;
+    return { days: left, age: age };
+  }
+
+  function fmtComma(n) {
+    return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  }
+
+  // 표준정규분포 누적확률 (Abramowitz & Stegun 7.1.26)
+  function normCdf(z) {
+    var t = 1 / (1 + 0.2316419 * Math.abs(z));
+    var d = 0.3989423 * Math.exp(-z * z / 2);
+    var p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
+    return z >= 0 ? 1 - p : p;
+  }
+
+  function lmsAt(metric, month) {
+    if (!GROWTH_LMS || !GROWTH_LMS[metric]) return null;
+    var m = Math.max(GROWTH_LMS.fromMonth, Math.min(GROWTH_LMS.toMonth, Math.round(month)));
+    return GROWTH_LMS[metric][String(m)] || null;
+  }
+
+  // 백분위 → 값(cm 또는 kg)
+  function valueAtPct(lms, pct) {
+    if (!lms) return NaN;
+    var L = lms[0], M = lms[1], S = lms[2];
+    var z = GROWTH_Z[pct] == null ? 0 : GROWTH_Z[pct];
+    if (!z) return M;
+    if (L === 0) return M * Math.exp(S * z);
+    return M * Math.pow(1 + L * S * z, 1 / L);
+  }
+
+  // 측정값 → 백분위 (0.1 ~ 99.9)
+  function pctOfValue(lms, value) {
+    if (!lms || !isFinite(value) || value <= 0) return NaN;
+    var L = lms[0], M = lms[1], S = lms[2];
+    var z = L === 0 ? Math.log(value / M) / S : (Math.pow(value / M, L) - 1) / (L * S);
+    var p = normCdf(z) * 100;
+    return Math.max(0.1, Math.min(99.9, p));
+  }
+
+  function pctText(p) {
+    if (!isFinite(p)) return "-";
+    return (p >= 99.9 ? "99.9" : p <= 0.1 ? "0.1" : String(Math.round(p)));
+  }
+
+  function growthMonthOf(dateKey, birthKey) {
+    return monthsBetween(birthKey || GROWTH_BIRTH, dateKey);
+  }
+
+  function normalizeGrowth(raw) {
+    var g = raw && typeof raw === "object" ? raw : {};
+    var records = Array.isArray(g.records) ? g.records : [];
+    var out = {
+      birthDate: isDateKey(g.birthDate) ? g.birthDate : GROWTH_BIRTH,
+      sex: "F",
+      records: []
+    };
+    records.forEach(function (r) {
+      if (!r || !isDateKey(r.date)) return;
+      var h = Number(r.height), w = Number(r.weight);
+      if (!(h > 0) && !(w > 0)) return;
+      out.records.push({
+        id: r.id || uid("g"),
+        date: r.date,
+        height: h > 0 ? Math.round(h * 10) / 10 : 0,
+        weight: w > 0 ? Math.round(w * 10) / 10 : 0
+      });
+    });
+    out.records.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+    return out;
+  }
+
+  function growthRecords() {
+    if (!state.growth) state.growth = normalizeGrowth(null);
+    if (!Array.isArray(state.growth.records)) state.growth.records = [];
+    return state.growth.records;
+  }
+
+  function growthRecordById(id) {
+    return growthRecords().find(function (r) { return r.id === id; }) || null;
+  }
+
+  // 가장 최근(날짜가 늦은) 기록과 그 앞 기록
+  function latestGrowth() {
+    var list = growthRecords().slice().sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+    if (!list.length) return { latest: null, prev: null };
+    return { latest: list[list.length - 1], prev: list.length > 1 ? list[list.length - 2] : null };
+  }
+
+  function growthPctOf(record, metric) {
+    if (!record) return NaN;
+    var lms = lmsAt(metric, growthMonthOf(record.date));
+    return pctOfValue(lms, metric === "height" ? record.height : record.weight);
+  }
+
   /* ---------- 상태 ---------- */
   var state = null;
   var store = null;
@@ -451,7 +611,8 @@
         days: {},                         // "YYYY-MM-DD": { checked: { itemId: true } }
         spent: 0                          // 부모님이 쓴(차감한) 용돈
       },
-      settings: { weatherCache: null }
+      growth: normalizeGrowth(null),        // 다인이 키·몸무게 성장 기록
+      settings: { weatherCache: null, notify: false }
     };
   }
 
@@ -484,6 +645,9 @@
     }
     if (!s.chat) { s.chat = []; changed = true; }
     if (!s.routine || typeof s.routine !== "object") { s.routine = normalizeRoutine(null); changed = true; }
+    if (!s.growth || typeof s.growth !== "object") { s.growth = normalizeGrowth(null); changed = true; }
+    if (!s.settings || typeof s.settings !== "object") { s.settings = { weatherCache: null, notify: false }; changed = true; }
+    if (s.settings.notify === undefined) { s.settings.notify = false; changed = true; }
     if (!s.members || !s.members.length) { s.members = JSON.parse(JSON.stringify(CFG.defaultMembers)); changed = true; }
     return changed;
   }
@@ -493,13 +657,14 @@
     if (!s) s = freshState();
     // 알려진 필드만 유지 (이상한 데이터 방어)
     var out = freshState();
-    ["members", "study", "stamps", "badges", "dex", "mission", "todos", "chat", "calendar", "checklists", "routine", "settings"].forEach(function (k) {
+    ["members", "study", "stamps", "badges", "dex", "mission", "todos", "chat", "calendar", "checklists", "routine", "growth", "settings"].forEach(function (k) {
       if (s[k] !== undefined) out[k] = s[k];
     });
     rollDailyState(out);
     out.calendar.events = normalizeEvents(out.calendar.events);
     out.checklists.lists = normalizeLists(out.checklists.lists);
     out.routine = normalizeRoutine(out.routine);
+    out.growth = normalizeGrowth(out.growth);
     return out;
   }
 
@@ -1241,6 +1406,22 @@
     return row;
   }
 
+  // 🎂 다인이 태어난 지 며칠째인지 (출생일을 1일째로 센다)
+  function homeBornBannerHtml() {
+    var birth = (state.growth && state.growth.birthDate) || GROWTH_BIRTH;
+    var today = todayKey();
+    var days = bornDays(birth, today);
+    var months = monthsBetween(birth, today);
+    var nb = nextBirthdayInfo(birth, today);
+    var left = nb.days === 0 ? "오늘 생일! 🎉" : "생일까지 " + nb.days + "일";
+    return '<div class="born-banner">' +
+      '<span class="bb-emoji" aria-hidden="true">🎂</span>' +
+      '<span class="bb-main"><b>' + esc(GROWTH_LABEL) + ' 태어난 지 ' + fmtComma(days) + '일째</b>' +
+        '<span class="bb-sub">' + esc(ageText(months)) + ' · ' + esc(left) + '</span></span>' +
+      '<span class="bb-d">D+' + fmtComma(days - 1) + '</span>' +
+      '</div>';
+  }
+
   function renderHome() {
     var home = qs("#homeContent");
     if (!home) return;
@@ -1266,6 +1447,7 @@
     var mission = MISSION_POOL[state.mission.index % MISSION_POOL.length];
 
     home.innerHTML = "";
+    home.insertAdjacentHTML("beforeend", homeBornBannerHtml());
     home.appendChild(el("div", "home-grid"));
 
     var grid = qs(".home-grid", home);
@@ -2234,6 +2416,270 @@
   /* =========================================================
      채팅
      ========================================================= */
+  /* =========================================================
+     성장 탭 — 2017 소아청소년 성장도표(여아) 위의 다인이 기록
+     ========================================================= */
+  var growthMetric = "height";          // height | weight
+
+  function growthUnit(metric) { return metric === "height" ? "cm" : "kg"; }
+  function growthName(metric) { return metric === "height" ? "키" : "몸무게"; }
+  function growthFix(n) { return (Math.round(n * 10) / 10).toFixed(1); }
+
+  function growthSeries(metric, pct) {
+    var out = [];
+    if (!GROWTH_LMS || !GROWTH_LMS[metric]) return out;
+    for (var m = GROWTH_LMS.fromMonth; m <= GROWTH_LMS.toMonth; m++) {
+      var lms = GROWTH_LMS[metric][String(m)];
+      if (!lms) continue;
+      out.push({ m: m, v: valueAtPct(lms, pct) });
+    }
+    return out;
+  }
+
+  function growthPoints(metric) {
+    var x0 = GROWTH_LMS ? GROWTH_LMS.fromMonth : 12;
+    var x1 = GROWTH_LMS ? GROWTH_LMS.toMonth : 84;
+    var birth = (state.growth && state.growth.birthDate) || GROWTH_BIRTH;
+    return growthRecords().map(function (r) {
+      var v = metric === "height" ? r.height : r.weight;
+      if (!(v > 0)) return null;
+      var m = monthsBetween(birth, r.date);
+      if (m < x0 - 0.6 || m > x1 + 0.6) return null;
+      return { m: m, v: v, r: r };
+    }).filter(Boolean).sort(function (a, b) {
+      return a.r.date < b.r.date ? -1 : a.r.date > b.r.date ? 1 : 0;
+    });
+  }
+
+  function growthChartSvg(metric) {
+    if (!GROWTH_LMS) return '<p class="muted center" style="padding:24px 0">성장도표 자료를 불러오지 못했어요.</p>';
+    var W = 560, H = 300, padL = 34, padR = 42, padT = 18, padB = 30;
+    var x0 = GROWTH_LMS.fromMonth, x1 = GROWTH_LMS.toMonth;
+    var series = GROWTH_PCTS.map(function (p) { return { pct: p, points: growthSeries(metric, p) }; });
+    var pts = growthPoints(metric);
+    var vals = [];
+    series.forEach(function (s) { s.points.forEach(function (pt) { vals.push(pt.v); }); });
+    pts.forEach(function (pt) { vals.push(pt.v); });
+    if (!vals.length) return '<p class="muted center" style="padding:24px 0">성장도표 자료를 불러오지 못했어요.</p>';
+
+    var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
+    var step = metric === "height" ? 10 : 5;
+    var vMin = Math.floor((lo - 3) / step) * step;
+    var vMax = Math.ceil((hi + 3) / step) * step;
+    if (vMax - vMin < step * 3) vMax = vMin + step * 3;
+
+    function X(m) { return padL + (m - x0) / (x1 - x0) * (W - padL - padR); }
+    function Y(v) { return H - padB - (v - vMin) / (vMax - vMin) * (H - padT - padB); }
+    function line(points) {
+      return points.map(function (pt, i) { return (i ? "L" : "M") + X(pt.m).toFixed(1) + " " + Y(pt.v).toFixed(1); }).join(" ");
+    }
+
+    var svg = [];
+    svg.push('<svg class="gc-svg" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="다인이 ' + growthName(metric) + ' 성장도표">');
+
+    // 가로 격자 + 눈금
+    for (var v = vMin; v <= vMax; v += step) {
+      svg.push('<line class="gc-grid" x1="' + padL + '" y1="' + Y(v).toFixed(1) + '" x2="' + (W - padR) + '" y2="' + Y(v).toFixed(1) + '"/>');
+      svg.push('<text class="gc-tick" x="' + (padL - 6) + '" y="' + (Y(v) + 3.2).toFixed(1) + '" text-anchor="end">' + v + '</text>');
+    }
+
+    // 백분위 밴드 (3~97, 10~90, 25~75)
+    function band(a, b, cls) {
+      var top = series.find(function (s) { return s.pct === b; }).points;
+      var bottom = series.find(function (s) { return s.pct === a; }).points;
+      var d = top.map(function (pt, i) { return (i ? "L" : "M") + X(pt.m).toFixed(1) + " " + Y(pt.v).toFixed(1); }).join(" ");
+      d += " " + bottom.slice().reverse().map(function (pt) { return "L" + X(pt.m).toFixed(1) + " " + Y(pt.v).toFixed(1); }).join(" ");
+      d += " Z";
+      svg.push('<path class="' + cls + '" d="' + d + '"/>');
+    }
+    band(3, 97, "gc-band-outer");
+    band(10, 90, "gc-band-mid");
+    band(25, 75, "gc-band-inner");
+
+    // 백분위 선 + 오른쪽 끝 라벨
+    series.forEach(function (s) {
+      svg.push('<path class="gc-pct gc-pct-' + s.pct + '" data-pct="' + s.pct + '" d="' + line(s.points) + '"/>');
+      if (s.pct === 3 || s.pct === 50 || s.pct === 97 || s.pct === 90 || s.pct === 10) {
+        var last = s.points[s.points.length - 1];
+        svg.push('<text class="gc-pct-label" x="' + (W - padR + 5) + '" y="' + (Y(last.v) + 3.4).toFixed(1) + '">' + s.pct + '</text>');
+      }
+    });
+
+    // 세로 눈금 (1살~7살)
+    for (var m = x0; m <= x1; m += 12) {
+      svg.push('<line class="gc-grid gc-grid-v" x1="' + X(m).toFixed(1) + '" y1="' + padT + '" x2="' + X(m).toFixed(1) + '" y2="' + (H - padB) + '"/>');
+      svg.push('<text class="gc-tick" x="' + X(m).toFixed(1) + '" y="' + (H - padB + 16) + '" text-anchor="middle">' + (m / 12) + '살</text>');
+    }
+
+    // 다인이 측정점
+    if (pts.length) {
+      if (pts.length > 1) {
+        svg.push('<path class="gc-record-line" d="' + pts.map(function (pt, i) { return (i ? "L" : "M") + X(pt.m).toFixed(1) + " " + Y(pt.v).toFixed(1); }).join(" ") + '"/>');
+      }
+      pts.forEach(function (pt, i) {
+        svg.push('<circle class="gc-dot' + (i === pts.length - 1 ? ' is-last' : '') + '" cx="' + X(pt.m).toFixed(1) + '" cy="' + Y(pt.v).toFixed(1) + '" r="' + (i === pts.length - 1 ? 5 : 4) + '"/>');
+      });
+      var lastPt = pts[pts.length - 1];
+      var lx = X(lastPt.m), ly = Y(lastPt.v);
+      var label = growthFix(lastPt.v) + growthUnit(metric);
+      var bw = 15 + label.length * 7.4;
+      var bx = Math.min(Math.max(lx - bw / 2, padL + 2), W - padR - bw - 2);
+      var by = Math.max(ly - 30, padT + 2);
+      svg.push('<g class="gc-callout"><rect x="' + bx.toFixed(1) + '" y="' + by.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="20" rx="10"/>' +
+        '<text x="' + (bx + bw / 2).toFixed(1) + '" y="' + (by + 14).toFixed(1) + '" text-anchor="middle">' + esc(label) + '</text></g>');
+    }
+
+    svg.push('<text class="gc-unit" x="' + (padL - 6) + '" y="' + (padT - 4) + '" text-anchor="end">' + growthUnit(metric) + '</text>');
+    svg.push("</svg>");
+    return svg.join("");
+  }
+
+  function growthSummaryBox(metric, latest, prev) {
+    var unit = growthUnit(metric);
+    var v = latest ? (metric === "height" ? latest.height : latest.weight) : 0;
+    var pv = prev ? (metric === "height" ? prev.height : prev.weight) : 0;
+    var pct = latest ? growthPctOf(latest, metric) : NaN;
+    var delta = "";
+    if (latest && prev && v > 0 && pv > 0) {
+      var d = Math.round((v - pv) * 10) / 10;
+      delta = "지난번보다 " + (d > 0 ? "+" : d < 0 ? "−" : "±") + growthFix(Math.abs(d)) + unit;
+    } else if (latest) {
+      delta = "처음 남긴 기록";
+    } else {
+      delta = "아직 기록이 없어요";
+    }
+    return '<div class="gs-box gs-' + metric + '">' +
+      '<span class="gs-label">' + growthName(metric) + '</span>' +
+      '<span class="gs-value">' + (latest && v > 0 ? growthFix(v) : "—") + '<small>' + unit + '</small></span>' +
+      '<span class="gs-delta">' + esc(delta) + '</span>' +
+      '<span class="gs-pct">' + (latest && v > 0 ? "또래 " + pctText(pct) + "백분위" : "기록을 남겨 보요") + '</span>' +
+      '</div>';
+  }
+
+  function renderGrowth() {
+    var root = qs("#growthContent");
+    if (!root) return;
+    if (!state.growth) state.growth = normalizeGrowth(null);
+    var birth = state.growth.birthDate || GROWTH_BIRTH;
+    var months = monthsBetween(birth, todayKey());
+    var pick = latestGrowth();
+    var latest = pick.latest, prev = pick.prev;
+    var metric = growthMetric;
+    var mPct = latest ? growthPctOf(latest, metric) : NaN;
+    var headline = latest
+      ? growthName(metric) + " 백분위 " + pctText(mPct) + "% · 또래 100명 중 " + pctText(mPct) + "명보다 " + (metric === "height" ? "커요" : "무거워요")
+      : "아직 잰 기록이 없어요 — 오늘 키와 몸무게를 재어 첫 점을 찍어 보요!";
+    var totalCount = growthRecords().length;
+
+    var rowsHtml = growthRecords().slice().sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : 0; }).map(function (r) {
+      return '<tr>' +
+        '<td>' + esc(fmtDateKo(r.date).replace(/년 |월 /g, ".").replace("일", "")) + '</td>' +
+        '<td>' + esc(ageText(monthsBetween(birth, r.date))) + '</td>' +
+        '<td>' + (r.height ? growthFix(r.height) + ' <small>cm</small>' : '—') + '</td>' +
+        '<td>' + (r.weight ? growthFix(r.weight) + ' <small>kg</small>' : '—') + '</td>' +
+        '<td class="gt-pct">' + (r.height ? pctText(growthPctOf(r, "height")) + '%' : '—') + '</td>' +
+        '<td><button class="icon-btn gt-del" type="button" data-action="del-growth" data-id="' + esc(r.id) + '" aria-label="이 기록 지우기" title="지우기">🗑️</button></td>' +
+      '</tr>';
+    }).join("");
+
+    root.innerHTML =
+      '<div class="growth-hero">' +
+        '<span class="gh-ico" aria-hidden="true">📏</span>' +
+        '<div class="gh-main">' +
+          '<p class="gh-title">이만큼 자랐어요!</p>' +
+          '<p class="gh-sub">' + esc(GROWTH_LABEL) + '는 <b>' + esc(ageText(months)) + '</b> <span>· ' + esc(birth.replace(/-/g, ".")) + '생</span></p>' +
+        '</div>' +
+        '<span class="gh-count">기록 ' + totalCount + '번</span>' +
+      '</div>' +
+
+      '<div class="growth-grid">' +
+        '<div class="card growth-sum">' +
+          '<div class="gs-row">' +
+            growthSummaryBox("height", latest, prev) +
+            growthSummaryBox("weight", latest, prev) +
+          '</div>' +
+          '<p class="gs-date">' + (latest ? '마지막으로 잰 날 ' + esc(fmtDateKo(latest.date)) : '아직 잰 날이 없어요') + '</p>' +
+          '<button class="btn btn-primary btn-block growth-btn" type="button" data-action="add-growth">📏 오늘 키·몸무게 재기</button>' +
+        '</div>' +
+        '<div class="card growth-chart">' +
+          '<div class="gc-head">' +
+            '<div class="gc-tabs" role="tablist" aria-label="키 또는 몸무게">' +
+              '<button class="gc-tab' + (metric === "height" ? ' is-active' : '') + '" type="button" role="tab" aria-selected="' + (metric === "height") + '" data-action="growth-metric" data-metric="height">키</button>' +
+              '<button class="gc-tab' + (metric === "weight" ? ' is-active' : '') + '" type="button" role="tab" aria-selected="' + (metric === "weight") + '" data-action="growth-metric" data-metric="weight">몸무게</button>' +
+            '</div>' +
+            '<p class="gc-headline" id="growthHeadline">' + esc(headline) + '</p>' +
+          '</div>' +
+          '<div class="gc-plot" id="growthChart">' + growthChartSvg(metric) + '</div>' +
+          '<p class="gc-legend">' + esc(GROWTH_LMS ? GROWTH_LMS.source : "2017 소아청소년 성장도표") + ' · 백분위선 3·10·25·50·75·90·97 (100명 중 몇 번째인지)</p>' +
+        '</div>' +
+      '</div>' +
+
+      '<div class="card growth-table">' +
+        '<div class="section-head"><div class="section-title"><span class="ico">🗂️</span>측정 기록</div>' +
+          '<button class="btn btn-xs btn-ghost" type="button" data-action="add-growth">+ 기록 추가</button></div>' +
+        (totalCount
+          ? '<div class="gt-scroll"><table class="gt-table"><thead><tr><th>측정일</th><th>만나이</th><th>키</th><th>몸무게</th><th>키 백분위</th><th></th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div>'
+          : '<p class="muted center" style="padding:14px 0">아직 측정 기록이 없어요. 「오늘 키·몸무게 재기」로 첫 기록을 남겨 보요!</p>') +
+      '</div>';
+  }
+
+  function openGrowthModal(record) {
+    var r = record || null;
+    openModal(
+      '<div class="row" style="gap:10px;flex-wrap:wrap">' +
+        '<label class="gfield grow"><span>잰 날</span><input type="date" id="growthDate" value="' + esc(r ? r.date : todayKey()) + '"></label>' +
+      '</div>' +
+      '<div class="row" style="gap:10px;flex-wrap:wrap;margin-top:10px">' +
+        '<label class="gfield grow"><span>키 (cm)</span><input type="number" id="growthHeight" inputmode="decimal" step="0.1" min="30" max="220" placeholder="예: 108.4" value="' + (r && r.height ? growthFix(r.height) : '') + '"></label>' +
+        '<label class="gfield grow"><span>몸무게 (kg)</span><input type="number" id="growthWeight" inputmode="decimal" step="0.1" min="2" max="120" placeholder="예: 18.4" value="' + (r && r.weight ? growthFix(r.weight) : '') + '"></label>' +
+      '</div>' +
+      '<p class="muted" style="font-size:11.5px;margin-top:8px">신발을 벗고 재면 더 정확해요. 둘 중 하나만 적어도 저장돼요.</p>' +
+      '<div class="modal-actions">' +
+        '<button class="btn btn-ghost" type="button" data-action="close-modal">취소</button>' +
+        '<button class="btn btn-primary" type="button" id="growthSaveBtn">저장</button>' +
+      '</div>',
+      { title: r ? "측정 기록 고치기" : "키·몸무게 기록" }
+    );
+
+    var saveBtn = qs("#growthSaveBtn");
+    if (saveBtn) saveBtn.addEventListener("click", function () {
+      var dateKey = qs("#growthDate").value;
+      var h = Number(qs("#growthHeight").value);
+      var w = Number(qs("#growthWeight").value);
+      if (!isDateKey(dateKey)) { toast("잰 날을 골라 주세요", "📅"); return; }
+      if (dateKey > todayKey()) { toast("오늘보다 뒤 날짜는 넣을 수 없어요", "📅"); return; }
+      if (!(h > 0) && !(w > 0)) { toast("키나 몸무게를 적어 주세요", "📏"); return; }
+      if (h && (h < 30 || h > 220)) { toast("키는 30~220cm 사이로 적어 주세요", "📏"); return; }
+      if (w && (w < 2 || w > 120)) { toast("몸무게는 2~120kg 사이로 적어 주세요", "⚖️"); return; }
+      var recs = growthRecords();
+      var same = recs.find(function (x) { return x.date === dateKey && x.id !== (r && r.id); });
+      var target = r || same;
+      if (target) {
+        target.date = dateKey;
+        target.height = h > 0 ? Math.round(h * 10) / 10 : 0;
+        target.weight = w > 0 ? Math.round(w * 10) / 10 : 0;
+      } else {
+        recs.push({ id: uid("g"), date: dateKey, height: h > 0 ? Math.round(h * 10) / 10 : 0, weight: w > 0 ? Math.round(w * 10) / 10 : 0 });
+      }
+      state.growth.records = recs.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+      persist(true);
+      closeModal();
+      renderGrowth();
+      toast("다인이 성장 기록을 남겼어요", "📏");
+    });
+  }
+
+  function deleteGrowth(id) {
+    var rec = growthRecordById(id);
+    if (!rec) return;
+    confirmModal("기록 지우기", fmtDateKo(rec.date) + " 기록을 지울까요?", "지우기", function () {
+      state.growth.records = growthRecords().filter(function (x) { return x.id !== id; });
+      persist(true);
+      renderGrowth();
+      toast("기록을 지웠어요", "🗑️");
+    });
+  }
+
   function renderChat() {
     var list = qs("#chatList");
     if (!list) return;
@@ -2251,21 +2697,44 @@
 
   function buildMsg(msg) {
     var mine = msg.from === meId;
-    var wrap = el("div", "msg" + (mine ? " mine" : ""));
+    var wrap = el("div", "msg" + (mine ? " mine" : "") + (msg.kind === "photo" ? " has-photo" : ""));
+    var body;
+    if (msg.kind === "voice") {
+      body = '<span class="bubble"><span class="voice-bubble">🎙️ <span>' + esc(msg.durationLabel || "음성") + '</span></span><audio controls src="' + esc(msg.audio) + '"></audio></span>';
+    } else if (msg.kind === "sticker") {
+      body = '<span class="bubble sticker-bubble"><img src="' + esc(msg.img) + '" alt="스티커"></span>';
+    } else if (msg.kind === "quick") {
+      body = '<span class="bubble quick-bubble"><span class="qb-emoji" aria-hidden="true">' + esc(msg.emoji || "💬") + '</span><span class="qb-text">' + esc(msg.text || "") + '</span></span>';
+    } else if (msg.kind === "photo") {
+      body = msg.imageData
+        ? '<button class="bubble photo-bubble" type="button" data-action="view-photo" data-id="' + esc(msg.id) + '" aria-label="사진 크게 보기"><img class="msg-photo" src="' + esc(msg.imageData) + '" alt="사진"></button>'
+        : '<span class="bubble photo-bubble is-trimmed">📷 사진 (오래되어 정리되었어요)</span>';
+    } else {
+      body = '<span class="bubble">' + esc(msg.text) + '</span>';
+    }
     wrap.innerHTML =
       '<img class="msg-avatar" src="' + esc(msg.avatar || memberAvatar(msg.from)) + '" alt="">' +
       '<div class="msg-main">' +
         '<span class="msg-name">' + esc(msg.fromName || memberName(msg.from)) + '</span>' +
-        (msg.kind === "voice"
-          ? '<span class="bubble"><span class="voice-bubble">🎙️ <span>' + esc(msg.durationLabel || "음성") + '</span></span><audio controls src="' + esc(msg.audio) + '"></audio></span>'
-          : msg.kind === "sticker"
-            ? '<span class="bubble sticker-bubble"><img src="' + esc(msg.img) + '" alt="스티커"></span>'
-            : '<span class="bubble">' + esc(msg.text) + '</span>') +
+        body +
         '<span class="msg-time">' + esc(fmtTime(msg.at)) + '</span>' +
         '<span class="heart-row"><button type="button" class="heart-btn' + (msg.heart ? " is-on" : "") + '" data-action="heart" data-id="' + esc(msg.id) + '">💗' +
           (msg.heart ? '<b>1</b>' : "") + '</button></span>' +
       '</div>';
     return wrap;
+  }
+
+  var MAX_PHOTO_MSGS = 24;          // 사진은 최근 24장만 화면용으로 보관 (오래된 사진은 문구만 남김)
+
+  // 오래된 사진의 imageData를 비워 저장 용량이 무한정 커지지 않게 한다.
+  function pruneChatPhotos() {
+    var photos = [];
+    (state.chat || []).forEach(function (m) { if (m && m.kind === "photo" && m.imageData) photos.push(m); });
+    var over = photos.length - MAX_PHOTO_MSGS;
+    for (var i = 0; i < over; i++) {
+      photos[i].imageData = "";
+      photos[i].photoTrimmed = true;
+    }
   }
 
   function sendChat(payload) {
@@ -2281,8 +2750,237 @@
     if (state.chat.length > CFG.app.maxChatMessages) {
       state.chat = state.chat.slice(-CFG.app.maxChatMessages);
     }
+    pruneChatPhotos();
     persist(true);
     renderChat();
+    return msg;
+  }
+
+  /* ---------- 다인이 말판 ---------- */
+  function renderQuickPanel() {
+    var grid = qs("#quickGrid");
+    if (grid && !grid.childElementCount) {
+      QUICK_MESSAGES.forEach(function (q) {
+        var b = el("button", "quick-btn");
+        b.type = "button";
+        b.setAttribute("data-action", "quick-msg");
+        b.setAttribute("data-label", q.label);
+        b.setAttribute("data-emoji", q.emoji);
+        b.innerHTML = '<span class="quick-emoji" aria-hidden="true">' + q.emoji + '</span>' +
+          '<span class="quick-label">' + esc(q.label) + '</span>';
+        grid.appendChild(b);
+      });
+    }
+    var panel = qs("#quickPanel");
+    if (panel) panel.classList.toggle("is-dain", meId === "dain");
+  }
+
+  function sendQuickMessage(label, emoji) {
+    sendChat({ kind: "quick", text: label, emoji: emoji });
+  }
+
+  /* ---------- 사진 올리기 ---------- */
+  var PHOTO_MAX_SIDE = 720;
+  var PHOTO_QUALITY = 0.72;
+  var PHOTO_TARGET_CHARS = 120000;   // base64 문자열 기준(약 90KB)
+
+  function compressImage(file) {
+    return new Promise(function (resolve, reject) {
+      if (!file) { reject(new Error("no file")); return; }
+      var reader = new FileReader();
+      reader.onerror = function () { reject(new Error("read failed")); };
+      reader.onload = function () {
+        var img = new Image();
+        img.onerror = function () { reject(new Error("image failed")); };
+        img.onload = function () {
+          try {
+            var w = img.naturalWidth || img.width || 0;
+            var h = img.naturalHeight || img.height || 0;
+            if (!w || !h) { resolve({ dataUrl: String(reader.result), w: 0, h: 0 }); return; }
+            var scale = Math.min(1, PHOTO_MAX_SIDE / Math.max(w, h));
+            var cw = Math.max(1, Math.round(w * scale));
+            var ch = Math.max(1, Math.round(h * scale));
+            var canvas = document.createElement("canvas");
+            canvas.width = cw;
+            canvas.height = ch;
+            var ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0, cw, ch);
+            var q = PHOTO_QUALITY;
+            var dataUrl = canvas.toDataURL("image/jpeg", q);
+            while (dataUrl.length > PHOTO_TARGET_CHARS && q > 0.4) {
+              q = Math.round((q - 0.08) * 100) / 100;
+              dataUrl = canvas.toDataURL("image/jpeg", q);
+            }
+            resolve({ dataUrl: dataUrl, w: cw, h: ch });
+          } catch (e) { reject(e); }
+        };
+        img.src = String(reader.result);
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function attachPhoto(file) {
+    var input = qs("#chatPhotoInput");
+    if (!file) return;
+    if (file.type && !/^image\//.test(file.type)) {
+      toast("사진 파일만 올릴 수 있어요", "📷");
+      if (input) input.value = "";
+      return;
+    }
+    toast("사진을 준비하고 있어요…", "📷");
+    compressImage(file).then(function (res) {
+      sendChat({ kind: "photo", imageData: res.dataUrl, w: res.w, h: res.h });
+      toast("사진을 보냈어요", "📷");
+    }).catch(function () {
+      toast("사진을 올리지 못했어요", "⚠️");
+    }).then(function () {
+      if (input) input.value = "";
+    });
+  }
+
+  function openPhoto(msg) {
+    if (!msg || !msg.imageData) return;
+    openModal(
+      '<div class="photo-viewer"><img class="photo-view" src="' + esc(msg.imageData) + '" alt="사진"></div>' +
+      '<p class="muted center" style="font-size:12px">' + esc(msg.fromName || memberName(msg.from)) + ' · ' + esc(fmtTime(msg.at)) + '</p>' +
+      '<div class="modal-actions"><button class="btn btn-ghost" type="button" data-action="close-modal">닫기</button></div>',
+      { title: "사진" }
+    );
+  }
+
+  /* ---------- 채팅 알림 (안 읽은 배지 · 배너 · 알림음) ---------- */
+  var unreadCount = 0;
+  var bannerTimer = null;
+  var notiAudio = null;
+  var notiSupported = typeof window.Notification === "function";
+
+  function paintUnread() {
+    var badge = qs("#chatBadge");
+    if (!badge) return;
+    if (unreadCount > 0) {
+      badge.textContent = unreadCount > 99 ? "99+" : String(unreadCount);
+      badge.hidden = false;
+    } else {
+      badge.textContent = "0";
+      badge.hidden = true;
+    }
+  }
+
+  function setUnread(n) {
+    unreadCount = Math.max(0, n | 0);
+    paintUnread();
+  }
+
+  function messagePreview(m) {
+    if (!m) return "";
+    if (m.kind === "photo") return "📷 사진을 보냈어요";
+    if (m.kind === "sticker") return "🎀 스티커를 보냈어요";
+    if (m.kind === "voice") return "🎙️ 음성 메시지를 보냈어요";
+    if (m.kind === "quick") return (m.emoji ? m.emoji + " " : "") + (m.text || "");
+    return m.text || "메시지";
+  }
+
+  function playNotiSound() {
+    try {
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      if (!notiAudio) notiAudio = new Ctx();
+      if (notiAudio.state === "suspended" && notiAudio.resume) notiAudio.resume();
+      [880, 1180].forEach(function (freq, i) {
+        var osc = notiAudio.createOscillator();
+        var gain = notiAudio.createGain();
+        osc.type = "sine";
+        osc.frequency.value = freq;
+        var t0 = notiAudio.currentTime + i * 0.13;
+        gain.gain.setValueAtTime(0.0001, t0);
+        gain.gain.exponentialRampToValueAtTime(0.075, t0 + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.16);
+        osc.connect(gain);
+        gain.connect(notiAudio.destination);
+        osc.start(t0);
+        osc.stop(t0 + 0.18);
+      });
+    } catch (e) { /* 소리는 실패해도 괜찮아요 */ }
+  }
+
+  function deviceNotify(m) {
+    try {
+      if (!notiSupported || !document.hidden) return;
+      if (!state || !state.settings || state.settings.notify !== true) return;
+      if (window.Notification.permission !== "granted") return;
+      var n = new window.Notification("우리 가족 기록장 💬", {
+        body: (m.fromName || memberName(m.from)) + ": " + messagePreview(m),
+        tag: "family-chat",
+        icon: "favicon.png"
+      });
+      n.onclick = function () {
+        try { window.focus(); } catch (e) { /* 무시 */ }
+        switchTab("chat");
+        try { n.close(); } catch (e) { /* 무시 */ }
+      };
+    } catch (e) { /* 알림은 실패해도 괜찮아요 */ }
+  }
+
+  function hideChatBanner() {
+    var b = qs("#chatBanner");
+    if (bannerTimer) clearTimeout(bannerTimer);
+    bannerTimer = null;
+    if (b) b.hidden = true;
+  }
+
+  function showChatBanner(m) {
+    var b = qs("#chatBanner");
+    if (!b || !m) return;
+    b.innerHTML =
+      '<span class="cb-ico" aria-hidden="true">💬</span>' +
+      '<span class="cb-txt"><b>' + esc(m.fromName || memberName(m.from)) + '</b> · ' + esc(messagePreview(m)) + '</span>' +
+      '<span class="cb-go">보기</span>';
+    b.hidden = false;
+    if (bannerTimer) clearTimeout(bannerTimer);
+    bannerTimer = setTimeout(hideChatBanner, 5000);
+  }
+
+  function noteIncoming(msgs) {
+    if (!msgs || !msgs.length) return;
+    var last = msgs[msgs.length - 1];
+    if (CURRENT_TAB !== "chat") {
+      setUnread(unreadCount + msgs.length);
+      showChatBanner(last);
+    }
+    playNotiSound();
+    deviceNotify(last);
+  }
+
+  function toggleNotify() {
+    if (!state.settings) state.settings = { weatherCache: null, notify: false };
+    if (state.settings.notify) {
+      state.settings.notify = false;
+      persist();
+      renderSettings();
+      toast("채팅 알림을 꺼어요", "🔕");
+      return;
+    }
+    if (!notiSupported) {
+      toast("이 브라우저는 기기 알림을 지원하지 않아요", "🔕");
+      return;
+    }
+    try {
+      window.Notification.requestPermission().then(function (perm) {
+        if (perm === "granted") {
+          state.settings.notify = true;
+          persist();
+          toast("채팅 알림을 켰어요", "🔔");
+        } else {
+          toast("브라우저에서 알림을 허용해 주셔야 와요", "🔕");
+        }
+        renderSettings();
+      }).catch(function () {
+        toast("알림을 켜지 못했어요", "🔕");
+      });
+    } catch (e) {
+      toast("알림을 켜지 못했어요", "🔕");
+    }
   }
 
   function renderStickerSheet() {
@@ -2462,6 +3160,13 @@
         '<div class="sr-sub">기록을 파일로 내려받거나, 파일로 되살릴 수 있어요</div></div>' +
         '<span><button class="btn btn-xs btn-ghost" type="button" data-action="export-data">내보내기</button> ' +
         '<button class="btn btn-xs btn-ghost" type="button" data-action="import-data">불러오기</button></span></div>' +
+      '<h4 class="title-font" style="font-size:14px;color:#5A463C;margin-top:10px">채팅 알림</h4>' +
+      '<div class="setting-row"><div class="sr-main"><div class="sr-title">새 메시지 알림 ' + (state.settings && state.settings.notify ? "켜짐" : "꺼짐") + '</div>' +
+        '<div class="sr-sub">' + (notiSupported
+          ? "다른 가족이 보내면 화면 위 배너와 알림음으로 알려드려요. 기기 알림도 함께 받을 수 있어요."
+          : "이 브라우저는 기기 알림을 지원하지 않아 배너와 알림음으로 알려드려요.") + '</div></div>' +
+        '<button class="btn btn-xs ' + (state.settings && state.settings.notify ? "btn-ghost" : "btn-soft") + '" type="button" data-action="toggle-notify">' +
+          (state.settings && state.settings.notify ? "끄기" : "알림 켜기") + '</button></div>' +
       '<h4 class="title-font" style="font-size:14px;color:#5A463C;margin-top:10px">도장 초기화</h4>' +
       '<p class="muted" style="font-size:11.5px">도장·배지·도감을 모두 지우고 새로 시작해요. (채팅·할 일은 그대로)</p>' +
       '<button class="btn btn-xs btn-danger" type="button" data-action="reset-stamps">도장판 비우기</button>',
@@ -2545,7 +3250,8 @@
       b.classList.toggle("is-active", on);
       b.setAttribute("aria-selected", on ? "true" : "false");
     });
-    if (tab === "chat") renderChat();
+    if (tab === "chat") { renderChat(); setUnread(0); hideChatBanner(); }
+    if (tab === "growth") renderGrowth();
     if (tab === "home") { renderHomeWeather(); fetchWeather(false); }
   }
 
@@ -2555,8 +3261,11 @@
     renderDex();
     renderMission();
     renderTogether();
+    renderGrowth();
     renderChat();
     renderStickerSheet();
+    renderQuickPanel();
+    paintUnread();
     renderTodayLabel();
   }
 
@@ -2880,6 +3589,43 @@
         break;
       }
 
+      /* 성장 */
+      case "growth-metric": {
+        growthMetric = btn.getAttribute("data-metric") === "weight" ? "weight" : "height";
+        renderGrowth();
+        break;
+      }
+      case "add-growth": openGrowthModal(null); break;
+      case "del-growth": deleteGrowth(id); break;
+
+      /* chat */
+      case "toggle-quick": {
+        var qgrid = qs("#quickGrid");
+        if (!qgrid) break;
+        var willHide = !qgrid.hidden;
+        qgrid.hidden = willHide;
+        var qt = qs("#quickToggle");
+        if (qt) {
+          qt.textContent = willHide ? "말판 열기" : "접기";
+          qt.setAttribute("aria-expanded", willHide ? "false" : "true");
+        }
+        break;
+      }
+      case "quick-msg":
+        sendQuickMessage(btn.getAttribute("data-label"), btn.getAttribute("data-emoji"));
+        break;
+      case "pick-photo": {
+        var photoInput = qs("#chatPhotoInput");
+        if (photoInput) photoInput.click();
+        break;
+      }
+      case "view-photo": {
+        openPhoto((state.chat || []).find(function (m) { return m.id === id; }));
+        break;
+      }
+      case "open-chat": switchTab("chat"); break;
+      case "toggle-notify": toggleNotify(); break;
+
       /* chat */
       case "toggle-stickers": {
         var sheet = qs("#stickerSheet");
@@ -2969,6 +3715,11 @@
     qs("#stickerSheet").hidden = true;
   });
 
+  qs("#chatPhotoInput").addEventListener("change", function (e) {
+    var file = e.target.files && e.target.files[0];
+    if (file) attachPhoto(file);
+  });
+
   // 함께 체크리스트의 “항목 추가” 줄
   document.addEventListener("submit", function (e) {
     var form = e.target;
@@ -2990,8 +3741,14 @@
       // 다른 기기의 변경 반영 (내가 방금 저장한 것은 무시)
       if (!payload) return;
       if (state && payload.updatedAt === state.updatedAt) return;
+      var seen = {};
+      (state && Array.isArray(state.chat) ? state.chat : []).forEach(function (m) { if (m && m.id) seen[m.id] = true; });
+      var incoming = (Array.isArray(payload.chat) ? payload.chat : []).filter(function (m) {
+        return m && m.id && !seen[m.id] && m.from !== meId;
+      });
       state = normalizeState(payload);
       renderAll();
+      if (incoming.length) noteIncoming(incoming);
     });
 
     store.load().then(function (rec) {

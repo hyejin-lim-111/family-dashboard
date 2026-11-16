@@ -1559,6 +1559,219 @@ h1, h2, h3, .title-font { font-family: var(--font-title); font-weight: 700; lett
 .alarm-btn { margin-top: 18px; min-height: 54px; font-size: 17px; font-weight: 700; }
 body.alarm-on { overflow: hidden; }
 
+/* ---------------- 홈: 태어난 지 며칠째 ---------------- */
+
+.born-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 12px 16px;
+  border-radius: var(--radius-lg);
+  border: 1.5px solid #FBD8E4;
+  background:
+    radial-gradient(120% 140% at 100% 0%, #FFF6DC 0%, rgba(255, 246, 220, 0) 55%),
+    linear-gradient(135deg, #FFF0F5 0%, #FFE9F1 55%, #FFF4E4 100%);
+  box-shadow: var(--shadow-tiny);
+}
+.bb-emoji { font-size: 26px; line-height: 1; flex: 0 0 auto; }
+.bb-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
+.bb-main b { font-family: var(--font-title); font-size: 15.5px; color: #B4446B; letter-spacing: -0.3px; }
+.bb-sub { font-size: 11.5px; color: var(--ink-faint); }
+.bb-d {
+  flex: 0 0 auto;
+  font-family: var(--font-num);
+  font-size: 12px;
+  font-weight: 700;
+  color: #C0567A;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid #F8D3E1;
+  border-radius: 999px;
+  padding: 4px 9px;
+}
+
+/* ---------------- 말판(빠른 메시지) · 사진 · 알림 ---------------- */
+
+.quick-panel {
+  background: #FFFBF5;
+  border: 1.5px solid #F7EADC;
+  border-radius: 18px;
+  padding: 8px 9px 10px;
+}
+.quick-panel.is-dain { border-color: #F7CDDC; background: linear-gradient(180deg, #FFF7FA, #FFFBF2); }
+.quick-head { display: flex; align-items: center; gap: 6px; padding: 0 2px 7px; }
+.quick-title { font-family: var(--font-title); font-size: 12.5px; color: #A94F72; font-weight: 700; }
+.quick-panel:not(.is-dain) .quick-title { color: var(--ink-soft); }
+.quick-note { font-size: 10px; color: var(--ink-faint); flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.quick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 6px; max-height: 252px; overflow-y: auto; }
+.quick-grid[hidden] { display: none; }
+.quick-btn {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  min-height: 58px; padding: 6px 3px;
+  border: 1.5px solid #F6E7D8; border-radius: 15px; background: #fff;
+  box-shadow: 0 2px 6px rgba(200, 165, 130, 0.08);
+  transition: transform 0.12s ease, background 0.15s ease, border-color 0.15s ease;
+}
+.quick-btn:active { transform: scale(0.95); background: #FFF3F7; border-color: #F8CFDE; }
+.quick-emoji { font-size: 21px; line-height: 1; }
+.quick-label { font-size: 10px; line-height: 1.22; color: var(--ink-soft); text-align: center; word-break: keep-all; }
+
+.photo-btn { flex: 0 0 auto; }
+.hidden-file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+.bubble.quick-bubble {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 7px 12px 7px 9px;
+  background: linear-gradient(180deg, #FFF6EA, #FFEEDC);
+  border-color: #F8DCC0;
+}
+.msg.mine .bubble.quick-bubble { background: linear-gradient(180deg, #FFE8F0, #FFDCE8); border-color: #FBD0DF; }
+.qb-emoji { font-size: 22px; line-height: 1; }
+.qb-text { font-size: 13px; font-weight: 600; color: var(--ink-soft); }
+
+.bubble.photo-bubble { padding: 4px; border-radius: 18px; background: #fff; line-height: 0; }
+.bubble.photo-bubble.is-trimmed {
+  padding: 9px 13px; line-height: 1.45; font-size: 12.5px; color: var(--ink-faint); background: #FFF9F3;
+}
+.msg.mine .bubble.photo-bubble { background: #FFF0F5; }
+.msg-photo { display: block; max-width: 200px; max-height: 260px; width: auto; height: auto; border-radius: 14px; object-fit: cover; }
+.photo-viewer { display: grid; place-items: center; }
+.photo-view { max-width: 100%; max-height: 64vh; border-radius: 16px; box-shadow: var(--shadow-soft); }
+
+.chat-banner {
+  position: fixed;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 70;
+  width: calc(100% - 24px);
+  max-width: 460px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 13px;
+  border: 1.5px solid #F9C6D8;
+  border-radius: 18px;
+  background: rgba(255, 250, 253, 0.97);
+  box-shadow: 0 12px 28px rgba(196, 120, 152, 0.24);
+  text-align: left;
+  animation: bannerDrop 0.26s ease both;
+}
+.chat-banner[hidden] { display: none; }
+.chat-banner .cb-ico {
+  width: 30px; height: 30px; flex: 0 0 auto; display: grid; place-items: center;
+  border-radius: 50%; background: linear-gradient(180deg, #FFB3CB, #F58FB2); font-size: 15px;
+}
+.chat-banner .cb-txt { flex: 1 1 auto; min-width: 0; font-size: 12.5px; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-banner .cb-txt b { color: #C0567A; }
+.chat-banner .cb-go { flex: 0 0 auto; font-size: 11px; font-weight: 700; color: #D8597F; }
+@keyframes bannerDrop {
+  from { opacity: 0; transform: translate(-50%, -12px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+.tab-btn .tab-badge {
+  top: 1px;
+  right: auto;
+  left: calc(50% + 3px);
+  min-width: 15px;
+  height: 15px;
+  line-height: 15px;
+  font-size: 9px;
+  padding: 0 3.5px;
+  background: #EE5A78;
+  box-shadow: 0 2px 6px rgba(238, 90, 120, 0.5);
+}
+
+/* ---------------- 📏 성장 탭 ---------------- */
+
+.growth-hero {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 14px 16px;
+  border-radius: var(--radius-xl);
+  border: 1.5px solid #F6E3B9;
+  background:
+    radial-gradient(110% 140% at 100% 0%, #FFF6D9 0%, rgba(255, 246, 217, 0) 60%),
+    linear-gradient(135deg, #FFFBF0 0%, #FFF3DC 60%, #FFF7E9 100%);
+  box-shadow: var(--shadow-tiny);
+}
+.gh-ico { font-size: 28px; line-height: 1; flex: 0 0 auto; }
+.gh-main { flex: 1 1 auto; min-width: 0; }
+.gh-title { margin: 0; font-family: var(--font-title); font-size: 18px; font-weight: 800; color: #9A6A1E; letter-spacing: -0.4px; }
+.gh-sub { margin: 3px 0 0; font-size: 12px; color: var(--ink-faint); }
+.gh-sub b { color: #B4446B; font-size: 13px; }
+.gh-sub span { opacity: 0.85; }
+.gh-count { flex: 0 0 auto; font-size: 11px; color: #9A6A1E; background: rgba(255, 255, 255, 0.75); border: 1px solid #F1E0B8; border-radius: 999px; padding: 4px 9px; }
+
+.growth-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+
+.growth-sum { display: flex; flex-direction: column; gap: 10px; }
+.gs-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+.gs-box {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 11px 10px;
+  border-radius: var(--radius-md);
+  border: 1.5px solid #F7E6D6;
+  background: linear-gradient(180deg, #FFFCF8, #FFF6EC);
+}
+.gs-box.gs-weight { border-color: #F4E0D0; background: linear-gradient(180deg, #FFFBF6, #FFF3E8); }
+.gs-label { font-size: 10.5px; font-weight: 700; color: var(--ink-faint); }
+.gs-value { font-family: var(--font-num); font-size: 23px; font-weight: 800; color: var(--ink); letter-spacing: -0.6px; line-height: 1.15; }
+.gs-value small { font-size: 11px; font-weight: 600; color: var(--ink-faint); margin-left: 2px; }
+.gs-delta { font-size: 10px; color: var(--good); font-weight: 600; }
+.gs-pct { font-size: 10.5px; color: #A94F72; }
+.gs-date { margin: 0; font-size: 11px; color: var(--ink-faint); text-align: center; }
+.growth-btn { min-height: 46px; font-size: 14px; font-weight: 700; }
+
+.growth-chart { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.gc-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.gc-tabs { display: inline-flex; padding: 3px; gap: 3px; background: #FFF4E6; border: 1.5px solid #F6E3C9; border-radius: 999px; }
+.gc-tab { border: 0; background: transparent; border-radius: 999px; padding: 5px 13px; font-size: 12px; font-weight: 700; color: var(--ink-faint); }
+.gc-tab.is-active { background: #fff; color: #A94F72; box-shadow: 0 2px 6px rgba(200, 165, 130, 0.16); }
+.gc-headline { margin: 0; flex: 1 1 190px; min-width: 0; font-size: 11.5px; color: var(--ink-soft); background: #FFFBF2; border: 1px solid #F5E7CF; border-radius: 999px; padding: 5px 11px; }
+.gc-plot { width: 100%; overflow: hidden; }
+.gc-svg { display: block; width: 100%; height: auto; }
+.gc-grid { stroke: #F2E7DA; stroke-width: 1; }
+.gc-grid-v { stroke-dasharray: 3 4; }
+.gc-tick { font-size: 8.5px; fill: #A18A78; font-family: var(--font-num); }
+.gc-unit { font-size: 8.5px; fill: #A18A78; }
+.gc-band-outer { fill: #FFF1DE; opacity: 0.85; }
+.gc-band-mid { fill: #FFE8CB; opacity: 0.6; }
+.gc-band-inner { fill: #FFDCC0; opacity: 0.45; }
+.gc-pct { fill: none; stroke: #E9C9A4; stroke-width: 1; }
+.gc-pct-3, .gc-pct-97 { stroke: #DDBB98; }
+.gc-pct-50 { stroke: #C9A071; stroke-width: 1.8; }
+.gc-pct-label { font-size: 8px; fill: #A18A78; font-family: var(--font-num); }
+.gc-record-line { fill: none; stroke: #F2668D; stroke-width: 2; stroke-linejoin: round; }
+.gc-dot { fill: #fff; stroke: #F2668D; stroke-width: 2; }
+.gc-dot.is-last { fill: #F2668D; }
+.gc-callout rect { fill: #F2668D; }
+.gc-callout text { font-size: 10.5px; fill: #fff; font-weight: 700; font-family: var(--font-num); }
+.gc-legend { margin: 0; font-size: 10px; color: var(--ink-faint); line-height: 1.5; }
+
+.growth-table { display: flex; flex-direction: column; gap: 8px; }
+.gt-scroll { overflow-x: auto; }
+.gt-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.gt-table th {
+  text-align: left; font-size: 10.5px; font-weight: 700; color: var(--ink-faint);
+  padding: 6px 6px; border-bottom: 1.5px solid var(--line); white-space: nowrap;
+}
+.gt-table td { padding: 8px 6px; border-bottom: 1px solid #F8EEE3; color: var(--ink-soft); white-space: nowrap; }
+.gt-table tr:last-child td { border-bottom: 0; }
+.gt-table td small { font-size: 9.5px; color: var(--ink-faint); }
+.gt-pct { color: #A94F72; font-weight: 700; }
+.gt-del { width: 30px; height: 30px; font-size: 12px; padding: 0; }
+
+.gfield { display: flex; flex-direction: column; gap: 4px; }
+.gfield span { font-size: 11px; color: var(--ink-faint); font-weight: 700; }
+.gfield input {
+  border: 1.5px solid var(--line-strong); background: #FFFCF8; border-radius: 12px;
+  padding: 10px 12px; font-size: 14px; font-family: var(--font-num); outline: none;
+}
+.gfield input:focus { border-color: #F5B9CD; background: #fff; }
+
 /* ---------------- tablet / desktop ---------------- */
 
 @media (min-width: 720px) {
@@ -1682,4 +1895,63 @@ body.alarm-on { overflow: hidden; }
   .tabbar, .topbar-actions, .chat-composer, .btn { display: none !important; }
   body { background: #fff; }
   .card { box-shadow: none; }
+}
+
+/* =========================================================
+   2026-11-16 추가: 7개 탭 · 말판 · 사진 · 성장도표 반응형
+   ========================================================= */
+
+/* 탭이 7개가 되어도 360px 폰에서 깨지지 않게 */
+.tabbar { gap: 1px; }
+.tab-btn { font-size: 10px; padding: 4px 0; }
+.tab-btn .tab-ico { font-size: 19px; }
+
+@media (min-width: 720px) {
+  .born-banner { padding: 14px 18px; margin-bottom: 14px; }
+  .bb-main b { font-size: 17px; }
+  .bb-sub { font-size: 12.5px; }
+
+  .quick-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); max-height: 260px; gap: 8px; }
+  .quick-btn { min-height: 68px; }
+  .quick-emoji { font-size: 24px; }
+  .quick-label { font-size: 11px; }
+  .quick-note { font-size: 10.5px; }
+
+  .msg-photo { max-width: 260px; max-height: 320px; }
+  .chat-banner { max-width: 520px; }
+
+  .growth-grid { grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr); gap: 14px; align-items: start; }
+  .growth-sum, .growth-chart { height: 100%; }
+  .gs-value { font-size: 26px; }
+  .gh-title { font-size: 20px; }
+  .gc-plot { padding-top: 2px; }
+  .gt-table { font-size: 13px; }
+}
+
+@media (min-width: 1024px) {
+  .growth-grid { grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.28fr); gap: 16px; }
+  .quick-grid { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+}
+
+@media (max-width: 380px) {
+  .tabbar { padding-left: 4px; padding-right: 4px; gap: 0; }
+  .tab-btn { font-size: 9px; gap: 1px; }
+  .tab-btn .tab-ico { font-size: 17px; }
+  .tab-btn .tab-badge { min-width: 13px; height: 13px; line-height: 13px; font-size: 8px; }
+
+  .bb-emoji { font-size: 22px; }
+  .bb-main b { font-size: 14px; }
+  .bb-sub { font-size: 10.5px; }
+  .bb-d { font-size: 11px; padding: 3px 8px; }
+
+  .quick-grid { grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 5px; max-height: 250px; }
+  .quick-btn { min-height: 56px; }
+  .quick-emoji { font-size: 19px; }
+  .quick-label { font-size: 9.5px; }
+
+  .gs-value { font-size: 20px; }
+  .gs-label, .gs-pct { font-size: 10px; }
+  .gh-title { font-size: 16.5px; }
+  .gc-headline { font-size: 11px; }
+  .msg-photo { max-width: 170px; max-height: 220px; }
 }

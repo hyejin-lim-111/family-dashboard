@@ -17,7 +17,7 @@ const css = read("styles.css");
 const app = read("app.js");
 
 console.log("\n[1] JS 문법");
-["app.js", "store.js", "config.js"].forEach((f) => {
+["app.js", "store.js", "config.js", "growth-data.js"].forEach((f) => {
   try {
     execFileSync(process.execPath, ["--check", path.join(ROOT, f)]);
     check(f + " 문법", true);
@@ -102,9 +102,10 @@ console.log("\n[5] 로컬 자산 경로");
 
 console.log("\n[6] 화면 골격");
 {
-  check("탭 6개", (html.match(/class="tab-btn/g) || []).length === 6, String((html.match(/class="tab-btn/g) || []).length));
-  check("뷰 6개", (html.match(/data-view="/g) || []).length === 6, String((html.match(/data-view="/g) || []).length));
+  check("탭 7개", (html.match(/class="tab-btn/g) || []).length === 7, String((html.match(/class="tab-btn/g) || []).length));
+  check("뷰 7개", (html.match(/data-view="/g) || []).length === 7, String((html.match(/data-view="/g) || []).length));
   check("함께 뷰 존재", /data-view="together"/.test(html));
+  check("성장 뷰 존재", /data-view="growth"/.test(html));
   check("config.js 키 보존", /sb_publishable_OJHJjHENxITeZVor5C9PiA_-9QMxUaC/.test(read("config.js")));
 }
 
@@ -155,6 +156,21 @@ console.log("\n[8] 홈 4단 배치 (태블릿 2열 · 미니 달력)");
   check("미니 달력 카드는 2번째 줄 왼쪽", /home-cell-cal"\)/.test(homeFn) && /el\("div", "home-cell home-cell-cal"\)/.test(homeFn));
   check("오늘 할 일·체크리스트가 3번째 줄", /home-cell-todo/.test(homeFn) && /home-cell-check/.test(homeFn));
   check("인사 카드가 맨 아래", /grid\.appendChild\(greet\)/.test(homeFn) && !/insertBefore\(greet/.test(homeFn));
+}
+
+console.log("\n[9] 2026-11-16 추가 (말판 · 사진 · 성장도표 · 태어난 지 · 알림)");
+{
+  const growth = read("growth-data.js");
+  check("성장도표 LMS 파일이 2017 도표 기준", /2017 소아청소년 성장도표/.test(growth) && /fromMonth: 12/.test(growth) && /toMonth: 84/.test(growth));
+  check("성장도표 여아 12~84개월 모두 있음", (growth.match(/^    "\d+": \[/gm) || []).length === (84 - 12 + 1) * 2, String((growth.match(/^    "\d+": \[/gm) || []).length));
+  check("올바른 50백분위(60개월 108.3714 / 18.3616)", /"60": \[-0.1404, 108\.3714, 0\.039\]/.test(growth) && /"60": \[-0.876, 18\.3616, 0\.122\]/.test(growth));
+  check("성장 뷰 스타일", /\.growth-hero\s*\{/.test(css) && /\.gc-svg\s*\{/.test(css) && /\.gt-table\s*\{/.test(css));
+  check("7탭 반응형(360px) 규칙", /\.tabbar\s*\{[^}]*gap: 1px/.test(css) && /@media \(max-width: 380px\)[\s\S]*\.tab-btn \.tab-badge/.test(css));
+  check("말판·사진·배너 스타일", /\.quick-grid\s*\{/.test(css) && /\.msg-photo\s*\{/.test(css) && /\.chat-banner\s*\{/.test(css) && /\.born-banner\s*\{/.test(css));
+  check("말판 14종 데이터", (app.match(/label: "/g) || []).length >= 14);
+  check("사진 압축(720px · JPEG)", /PHOTO_MAX_SIDE = 720/.test(app) && /toDataURL\("image\/jpeg"/.test(app));
+  check("알림 배지·배너·알림음 연결", /setUnread\(/.test(app) && /showChatBanner\(/.test(app) && /playNotiSound\(/.test(app) && /Notification\.requestPermission/.test(app));
+  check("홈 태어난 지 배너", /bornDays\(/.test(app) && /homeBornBannerHtml/.test(app));
 }
 
 console.log("\n================================");

@@ -20,6 +20,13 @@
 </head>
 <body>
 
+<!-- 새 채팅 알림 배너 (다른 가족이 보낸 메시지·사진) -->
+<button class="chat-banner" id="chatBanner" type="button" data-action="open-chat" hidden aria-live="polite">
+  <span class="cb-ico" aria-hidden="true">💬</span>
+  <span class="cb-txt" id="chatBannerText"></span>
+  <span class="cb-go">보기</span>
+</button>
+
 <!-- 기기 프로필 선택 (처음 켤 때 / 잠금 해제 시) -->
 <div class="gate" id="deviceGate" hidden>
   <div class="gate-inner">
@@ -84,12 +91,25 @@
       </div>
     </section>
 
+    <!-- 성장 (키·몸무게 성장도표) -->
+    <section class="view" id="view-growth" data-view="growth" aria-label="다인이 성장 기록">
+      <div class="stack" id="growthContent"></div>
+    </section>
+
     <!-- 채팅 -->
     <section class="view" id="view-chat" data-view="chat" aria-label="우리 가족 채팅">
       <div class="stack chat-shell">
         <div class="card chat-card">
           <div class="chat-list" id="chatList" aria-live="polite"></div>
           <div class="chat-composer" id="chatComposer">
+            <div class="quick-panel" id="quickPanel">
+              <div class="quick-head">
+                <span class="quick-title">🎀 다인이 말판</span>
+                <span class="quick-note">한 번만 누르면 바로 보내져요</span>
+                <button class="btn btn-xs btn-ghost" type="button" data-action="toggle-quick" id="quickToggle" aria-expanded="true">접기</button>
+              </div>
+              <div class="quick-grid" id="quickGrid"></div>
+            </div>
             <div class="sticker-sheet" id="stickerSheet" hidden></div>
             <div class="rec-bar" id="recBar" hidden>
               <span class="rec-dot"></span>
@@ -99,6 +119,8 @@
             </div>
             <form class="composer-row" id="chatForm" autocomplete="off">
               <button class="icon-btn" type="button" data-action="toggle-stickers" aria-label="스티커" title="스티커">🎀</button>
+              <button class="icon-btn photo-btn" type="button" data-action="pick-photo" aria-label="사진 찍어 올리기" title="사진 올리기">📷</button>
+              <input class="hidden-file" id="chatPhotoInput" type="file" accept="image/*" aria-label="사진 고르기">
               <input class="text-input" id="chatInput" type="text" placeholder="따뜻한 한마디 남겨요" aria-label="메시지" maxlength="300">
               <button class="icon-btn mic-btn" type="button" data-action="start-voice" id="micBtn" aria-label="음성 메모" title="음성 메모">🎙️</button>
               <button class="send-btn" type="submit" aria-label="보내기">➤</button>
@@ -127,8 +149,12 @@
     <button class="tab-btn" type="button" role="tab" data-action="tab" data-tab="together" aria-selected="false" aria-label="가족 달력과 함께 체크리스트">
       <span class="tab-ico">🗓️</span><span>함께</span>
     </button>
+    <button class="tab-btn" type="button" role="tab" data-action="tab" data-tab="growth" aria-selected="false">
+      <span class="tab-ico">📏</span><span>성장</span>
+    </button>
     <button class="tab-btn" type="button" role="tab" data-action="tab" data-tab="chat" aria-selected="false">
       <span class="tab-ico">💬</span><span>채팅</span>
+      <span class="tab-badge" id="chatBadge" hidden>0</span>
     </button>
   </nav>
 
@@ -152,6 +178,7 @@
 <div class="toast" id="toast" hidden role="status" aria-live="polite"></div>
 
 <script src="config.js"></script>
+<script src="growth-data.js"></script>
 <script src="store.js"></script>
 <script src="app.js"></script>
 </body>
