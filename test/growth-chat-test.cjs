@@ -177,15 +177,16 @@ const basePayload = {
   click($('.gc-tab[data-metric="height"]'));
   await sleep(80);
 
-  console.log("\n[6] 채팅 — 다인이 말판 14종");
+  console.log("\n[6] 채팅 — 다인이 말판 17종");
   click($('.tab-btn[data-tab="chat"]'));
   await sleep(120);
-  check("말판 버튼 14개", $$("#quickGrid .quick-btn").length === 14, "got " + $$("#quickGrid .quick-btn").length);
+  check("말판 버튼 17개", $$("#quickGrid .quick-btn").length === 17, "got " + $$("#quickGrid .quick-btn").length);
   const labels = $$("#quickGrid .quick-btn").map((b) => b.getAttribute("data-label"));
   ["잘 잤어요", "응가 했어요", "빨리 오세요", "어디에요?", "사랑해요", "보고 싶어요", "과자 먹고 싶어요",
+    "배고파요", "쉬마려워요", "졸려요",
     "안녕히 주무세요", "TV 봐도 돼요?", "숙제 다 했어요", "아파요", "전화해 주세요", "도와주세요", "유치원 갔다올게요"]
     .forEach((t) => { if (!labels.includes(t)) check("말판 항목: " + t, false, labels.join(",")); });
-  check("말판 14개 문구 모두 있음", labels.length === 14, labels.join(","));
+  check("말판 17개 문구 모두 있음", labels.length === 17, labels.join(","));
   check("다인 프로필이면 강조", $("#quickPanel").classList.contains("is-dain"));
   const loveBtn = $$("#quickGrid .quick-btn").find((b) => b.getAttribute("data-label") === "사랑해요");
   click(loveBtn);

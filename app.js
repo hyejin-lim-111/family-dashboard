@@ -183,6 +183,9 @@
     { id: "q-love",  emoji: "😍", label: "사랑해요" },
     { id: "q-miss",  emoji: "🥺", label: "보고 싶어요" },
     { id: "q-snack", emoji: "🍪", label: "과자 먹고 싶어요" },
+    { id: "q-hungry", emoji: "🍽️", label: "배고파요" },
+    { id: "q-toilet", emoji: "🚽", label: "쉬마려워요" },
+    { id: "q-sleepy", emoji: "😴", label: "졸려요" },
     { id: "q-night", emoji: "🌙", label: "안녕히 주무세요" },
     { id: "q-tv",    emoji: "📺", label: "TV 봐도 돼요?" },
     { id: "q-home",  emoji: "📚", label: "숙제 다 했어요" },
@@ -190,6 +193,14 @@
     { id: "q-call",  emoji: "📞", label: "전화해 주세요" },
     { id: "q-help",  emoji: "🙋", label: "도와주세요" },
     { id: "q-school", emoji: "🏫", label: "유치원 갔다올게요" }
+  ];
+  var MAX_QUICK_CUSTOM = 20;          // 직접 추가한 말판은 이만큼까지
+  var QUICK_LABEL_MAX = 12;           // 문구 길이
+  // 말판 문구를 만들 때 자주 쓰는 이모지 (눌러서 고르거나 직접 넣어도 돼요)
+  var QUICK_EMOJI_CHOICES = [
+    "🍚", "🍽️", "🍪", "🥛", "😴", "💤", "🚽", "💩",
+    "🥺", "😍", "😢", "🤒", "🧸", "🎮", "📺", "🏫",
+    "🚗", "🏠", "🙋", "💬"
   ];
 
   var DOW_KO = ["일", "월", "화", "수", "목", "금", "토"];
@@ -402,6 +413,34 @@
         })
       };
     });
+  }
+
+  // 다인이 말판 — 직접 추가한 문구와 기본 문구 숨김 목록을 안전하게 다듬는다
+  function normalizeQuickPhrases(raw) {
+    var out = { custom: [], hidden: [] };
+    var src = (raw && typeof raw === "object") ? raw : null;
+    if (!src) return out;
+    var known = {};
+    QUICK_MESSAGES.forEach(function (q) { known[q.id] = true; });
+    (Array.isArray(src.hidden) ? src.hidden : []).forEach(function (id) {
+      if (known[id] && out.hidden.indexOf(id) === -1) out.hidden.push(id);
+    });
+    var seen = {};
+    (Array.isArray(src.custom) ? src.custom : []).forEach(function (q) {
+      if (!q || typeof q !== "object") return;
+      var label = String(q.label == null ? "" : q.label).replace(/\s+/g, " ").trim();
+      if (!label) return;
+      label = label.slice(0, QUICK_LABEL_MAX);
+      if (seen[label]) return;
+      seen[label] = true;
+      out.custom.push({
+        id: String(q.id || uid("qp")),
+        emoji: String(q.emoji == null ? "" : q.emoji).trim().slice(0, 8) || "💬",
+        label: label
+      });
+    });
+    out.custom = out.custom.slice(0, MAX_QUICK_CUSTOM);
+    return out;
   }
 
   function fmtWon(n) {
@@ -644,6 +683,7 @@
       },
       todos: { dain: [], mom: [], dad: [] },
       chat: [],
+      quickPhrases: { custom: [], hidden: [] }, // 다인이 말판 — 직접 추가한 문구 / 기본 문구 중 숨긴 것
       calendar: { events: [] },          // 가족 공유 달력 일정
       checklists: { lists: defaultLists() }, // 가족 공유 체크리스트
       routine: {                          // 다인이 저녁 루틴 + 용돈
@@ -685,6 +725,7 @@
       changed = true;
     }
     if (!s.chat) { s.chat = []; changed = true; }
+    if (!s.quickPhrases || typeof s.quickPhrases !== "object") { s.quickPhrases = { custom: [], hidden: [] }; changed = true; }
     if (!s.routine || typeof s.routine !== "object") { s.routine = normalizeRoutine(null); changed = true; }
     if (!s.growth || typeof s.growth !== "object") { s.growth = normalizeGrowth(null); changed = true; }
     if (!s.pet || typeof s.pet !== "object") { s.pet = normalizePet(null); changed = true; }
@@ -701,11 +742,12 @@
     if (!s) s = freshState();
     // 알려진 필드만 유지 (이상한 데이터 방어)
     var out = freshState();
-    ["members", "study", "stamps", "badges", "dex", "mission", "todos", "chat", "calendar", "checklists", "routine", "growth", "pet", "settings"].forEach(function (k) {
+    ["members", "study", "stamps", "badges", "dex", "mission", "todos", "chat", "quickPhrases", "calendar", "checklists", "routine", "growth", "pet", "settings"].forEach(function (k) {
       if (s[k] !== undefined) out[k] = s[k];
     });
     rollDailyState(out);
     out.calendar.events = normalizeEvents(out.calendar.events);
+    out.quickPhrases = normalizeQuickPhrases(out.quickPhrases);
     out.checklists.lists = normalizeLists(out.checklists.lists);
     out.routine = normalizeRoutine(out.routine);
     out.growth = normalizeGrowth(out.growth);
@@ -3158,22 +3200,159 @@
   }
 
   /* ---------- 다인이 말판 ---------- */
-  function renderQuickPanel() {
-    var grid = qs("#quickGrid");
-    if (grid && !grid.childElementCount) {
-      QUICK_MESSAGES.forEach(function (q) {
-        var b = el("button", "quick-btn");
-        b.type = "button";
-        b.setAttribute("data-action", "quick-msg");
-        b.setAttribute("data-label", q.label);
-        b.setAttribute("data-emoji", q.emoji);
-        b.innerHTML = '<span class="quick-emoji" aria-hidden="true">' + q.emoji + '</span>' +
-          '<span class="quick-label">' + esc(q.label) + '</span>';
-        grid.appendChild(b);
-      });
+  var quickEditMode = false;
+  var quickSig = null;
+
+  function quickPhraseData() {
+    if (!state.quickPhrases || typeof state.quickPhrases !== "object") state.quickPhrases = { custom: [], hidden: [] };
+    var d = state.quickPhrases;
+    if (!Array.isArray(d.custom)) d.custom = [];
+    if (!Array.isArray(d.hidden)) d.hidden = [];
+    return d;
+  }
+
+  // 기본 문구(숨긴 것은 빼고) + 직접 추가한 문구를 순서대로
+  function quickPhraseList() {
+    var d = quickPhraseData();
+    var list = QUICK_MESSAGES.filter(function (q) {
+      return d.hidden.indexOf(q.id) === -1;
+    }).map(function (q) {
+      return { id: q.id, emoji: q.emoji, label: q.label, custom: false };
+    });
+    d.custom.forEach(function (q) {
+      list.push({ id: q.id, emoji: q.emoji, label: q.label, custom: true });
+    });
+    return list;
+  }
+
+  function paintQuickEditBtn() {
+    var qe = qs("#quickEditBtn");
+    if (qe) {
+      qe.textContent = quickEditMode ? "완료" : "편집";
+      qe.setAttribute("aria-pressed", quickEditMode ? "true" : "false");
     }
+  }
+
+  function renderQuickPanel() {
     var panel = qs("#quickPanel");
     if (panel) panel.classList.toggle("is-dain", meId === "dain");
+    var grid = qs("#quickGrid");
+    if (!grid) return;
+    var list = quickPhraseList();
+    var sig = (quickEditMode ? "edit|" : "view|") + list.map(function (q) { return q.id + ":" + q.emoji + ":" + q.label; }).join("|");
+    if (sig === quickSig) return;            // 바뀐 게 없으면 그대로 둔다 (스크롤 위치 유지)
+    quickSig = sig;
+    grid.classList.toggle("is-editing", quickEditMode);
+    grid.innerHTML = "";
+    list.forEach(function (q) {
+      var cell = el("div", "quick-cell");
+      var b = el("button", "quick-btn");
+      b.type = "button";
+      b.setAttribute("data-action", "quick-msg");
+      b.setAttribute("data-label", q.label);
+      b.setAttribute("data-emoji", q.emoji);
+      b.innerHTML = '<span class="quick-emoji" aria-hidden="true">' + esc(q.emoji) + '</span>' +
+        '<span class="quick-label">' + esc(q.label) + '</span>';
+      cell.appendChild(b);
+      if (quickEditMode) {
+        var del = el("button", "quick-del");
+        del.type = "button";
+        del.setAttribute("data-action", "quick-del");
+        del.setAttribute("data-id", q.id);
+        del.setAttribute("aria-label", "『" + q.label + "』 말판에서 지우기");
+        del.textContent = "✕";
+        cell.appendChild(del);
+      }
+      grid.appendChild(cell);
+    });
+    var bar = qs("#quickEditBar");
+    if (bar) bar.hidden = !quickEditMode;
+    paintQuickEditBtn();
+  }
+
+  // 말판 문구를 하나 더한다 — 이모지(고르기/직접 입력) + 문구
+  function openQuickAddModal() {
+    if (quickPhraseData().custom.length >= MAX_QUICK_CUSTOM) {
+      toast("말판은 " + MAX_QUICK_CUSTOM + "개까지 더할 수 있어요", "💬");
+      return;
+    }
+    var chips = QUICK_EMOJI_CHOICES.map(function (e) {
+      return '<button type="button" class="qp-chip' + (e === "💬" ? " is-on" : "") + '" data-action="qp-emoji" data-emoji="' + esc(e) + '" aria-label="이모지 ' + esc(e) + '">' + e + '</button>';
+    }).join("");
+    openModal(
+      '<p class="muted" style="font-size:12px;margin-bottom:8px">쓰고 싶은 이모지를 고르거나 직접 넣어요.</p>' +
+      '<div class="qp-chips" id="qpChips">' + chips + '</div>' +
+      '<div class="row" style="gap:8px;margin-top:10px;align-items:flex-end">' +
+        '<label class="gfield" style="flex:0 0 76px"><span>이모지</span><input id="qpEmoji" type="text" maxlength="8" value="💬" aria-label="이모지"></label>' +
+        '<label class="gfield grow"><span>말판 문구</span><input id="qpLabel" type="text" maxlength="' + QUICK_LABEL_MAX + '" placeholder="예: 배고파요" aria-label="말판 문구"></label>' +
+      '</div>' +
+      '<p class="muted" style="font-size:11.5px;margin-top:8px">말판은 가족 모두 함께 써요 — 어느 기기에서 더해도 세 기기에 함께 보여요.</p>' +
+      '<div class="modal-actions">' +
+        '<button class="btn btn-ghost" type="button" data-action="close-modal">취소</button>' +
+        '<button class="btn btn-primary" type="button" id="qpSaveBtn">말판에 추가</button>' +
+      '</div>',
+      { title: "다인이 말판에 더하기" }
+    );
+    var saveBtn = qs("#qpSaveBtn");
+    if (saveBtn) saveBtn.addEventListener("click", saveQuickPhrase);
+    var labelInput = qs("#qpLabel");
+    if (labelInput) labelInput.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") { e.preventDefault(); saveQuickPhrase(); }
+    });
+  }
+
+  function saveQuickPhrase() {
+    var emojiInput = qs("#qpEmoji");
+    var labelInput = qs("#qpLabel");
+    if (!labelInput) return;
+    var label = String(labelInput.value || "").replace(/\s+/g, " ").trim().slice(0, QUICK_LABEL_MAX);
+    var emoji = String((emojiInput && emojiInput.value) || "").trim().slice(0, 8) || "💬";
+    if (!label) { toast("말판 문구를 적어 주세요", "💬"); labelInput.focus(); return; }
+    var d = quickPhraseData();
+    if (d.custom.length >= MAX_QUICK_CUSTOM) { toast("말판은 " + MAX_QUICK_CUSTOM + "개까지 더할 수 있어요", "💬"); return; }
+    var dup = quickPhraseList().some(function (q) { return q.label === label; });
+    if (dup) { toast("이미 말판에 있는 문구예요", "💬"); labelInput.focus(); return; }
+    d.custom.push({ id: uid("qp"), emoji: emoji, label: label });
+    persist(true);
+    closeModal();
+    renderQuickPanel();
+    toast("말판에 『" + label + "』를 더했어요", "💬");
+  }
+
+  function deleteQuickPhrase(id) {
+    if (!id) return;
+    var d = quickPhraseData();
+    var custom = d.custom.filter(function (q) { return q.id === id; })[0];
+    if (custom) {
+      d.custom = d.custom.filter(function (q) { return q.id !== id; });
+      persist(true);
+      renderQuickPanel();
+      toast("『" + custom.label + "』를 말판에서 지웠어요", "💬");
+      return;
+    }
+    var base = QUICK_MESSAGES.filter(function (q) { return q.id === id; })[0];
+    if (!base) return;
+    if (d.hidden.indexOf(id) === -1) d.hidden.push(id);
+    persist(true);
+    renderQuickPanel();
+    toast("『" + base.label + "』를 말판에서 숨겼어요", "💬");
+  }
+
+  function resetQuickPhrases() {
+    var d = quickPhraseData();
+    if (!d.custom.length && !d.hidden.length) { toast("이미 기본 말판이에요", "💬"); return; }
+    confirmModal(
+      "말판을 기본으로 되돌리기",
+      "직접 더한 문구는 지워지고, 숨긴 기본 문구는 다시 나타나요. 기본 " + QUICK_MESSAGES.length + "개로 돌아가요.",
+      "되돌리기",
+      function () {
+        state.quickPhrases = { custom: [], hidden: [] };
+        quickEditMode = false;
+        persist(true);
+        renderQuickPanel();
+        toast("말판을 기본으로 되돌렸어요", "💬");
+      }
+    );
   }
 
   function sendQuickMessage(label, emoji) {
@@ -4024,8 +4203,24 @@
         break;
       }
       case "quick-msg":
+        if (quickEditMode) { toast("편집 중이에요 — ✕ 로 지우고 완료를 눌러 주세요", "✏️"); break; }
         sendQuickMessage(btn.getAttribute("data-label"), btn.getAttribute("data-emoji"));
         break;
+      case "quick-add": openQuickAddModal(); break;
+      case "quick-edit":
+        quickEditMode = !quickEditMode;
+        renderQuickPanel();
+        paintQuickEditBtn();
+        break;
+      case "quick-del": deleteQuickPhrase(btn.getAttribute("data-id")); break;
+      case "quick-reset": resetQuickPhrases(); break;
+      case "qp-emoji": {
+        var qpEmoji = qs("#qpEmoji");
+        if (qpEmoji) qpEmoji.value = btn.getAttribute("data-emoji") || "💬";
+        var chips = qsa("#qpChips .qp-chip");
+        chips.forEach(function (c) { c.classList.toggle("is-on", c === btn); });
+        break;
+      }
       case "pick-photo": {
         var photoInput = qs("#chatPhotoInput");
         if (photoInput) photoInput.click();

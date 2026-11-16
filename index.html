@@ -106,7 +106,13 @@
               <div class="quick-head">
                 <span class="quick-title">🎀 다인이 말판</span>
                 <span class="quick-note">한 번만 누르면 바로 보내져요</span>
+                <button class="btn btn-xs btn-ghost quick-tool" type="button" data-action="quick-add" id="quickAddBtn" aria-label="말판 문구 추가" title="말판 문구 추가">+ 추가</button>
+                <button class="btn btn-xs btn-ghost quick-tool" type="button" data-action="quick-edit" id="quickEditBtn" aria-pressed="false" title="말판 직접 편집">편집</button>
                 <button class="btn btn-xs btn-ghost" type="button" data-action="toggle-quick" id="quickToggle" aria-expanded="true">접기</button>
+              </div>
+              <div class="quick-edit-bar" id="quickEditBar" hidden>
+                <span class="quick-edit-hint">✕ 를 눌러 지우고 <b>+ 추가</b> 로 더해요</span>
+                <button class="btn btn-xs btn-ghost" type="button" data-action="quick-reset">기본값으로</button>
               </div>
               <div class="quick-grid" id="quickGrid"></div>
             </div>

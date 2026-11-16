@@ -167,7 +167,10 @@ console.log("\n[9] 2026-11-16 추가 (말판 · 사진 · 성장도표 · 태어
   check("성장 뷰 스타일", /\.growth-hero\s*\{/.test(css) && /\.gc-svg\s*\{/.test(css) && /\.gt-table\s*\{/.test(css));
   check("7탭 반응형(360px) 규칙", /\.tabbar\s*\{[^}]*gap: 1px/.test(css) && /@media \(max-width: 380px\)[\s\S]*\.tab-btn \.tab-badge/.test(css));
   check("말판·사진·배너 스타일", /\.quick-grid\s*\{/.test(css) && /\.msg-photo\s*\{/.test(css) && /\.chat-banner\s*\{/.test(css) && /\.born-banner\s*\{/.test(css));
-  check("말판 14종 데이터", (app.match(/label: "/g) || []).length >= 14);
+  check("말판 17종 데이터", (app.match(/label: "/g) || []).length >= 17);
+  check("말판 직접 편집(추가·삭제·되돌리기) 연결", /case "quick-add"/.test(app) && /case "quick-del"/.test(app) && /case "quick-reset"/.test(app) && /id="quickAddBtn"/.test(html) && /id="quickEditBar"/.test(html));
+  check("말판 편집 스타일", /\.quick-del\s*\{/.test(css) && /\.qp-chip\s*\{/.test(css) && /\.quick-edit-bar\s*\{/.test(css));
+  check("말판 state.quickPhrases 저장·동기화", /state\.quickPhrases/.test(app) && /function normalizeQuickPhrases/.test(app));
   check("사진 압축(720px · JPEG)", /PHOTO_MAX_SIDE = 720/.test(app) && /toDataURL\("image\/jpeg"/.test(app));
   check("알림 배지·배너·알림음 연결", /setUnread\(/.test(app) && /showChatBanner\(/.test(app) && /playNotiSound\(/.test(app) && /Notification\.requestPermission/.test(app));
   check("홈 태어난 지 배너", /bornDays\(/.test(app) && /homeBornBannerHtml/.test(app));

@@ -200,7 +200,7 @@ function check(name, cond, extra) {
   check("스티커 전송", !!$(".sticker-bubble"));
   const st6 = JSON.parse(window.localStorage.getItem("family-dashboard.state.v1")).payload;
   check("채팅 2건 저장(텍스트+스티커, 하트는 반응)", st6.chat.length === 2, "got " + st6.chat.length);
-  check("말판 버튼 14종", $$("#quickGrid .quick-btn").length === 14, "got " + $$("#quickGrid .quick-btn").length);
+  check("말판 버튼 17종", $$("#quickGrid .quick-btn").length === 17, "got " + $$("#quickGrid .quick-btn").length);
   check("말판을 누르면 바로 전송", (function () {
     const btn = $$("#quickGrid .quick-btn")[4];
     const label = btn.getAttribute("data-label");
