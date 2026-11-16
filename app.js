@@ -2453,7 +2453,7 @@
 
   function growthChartSvg(metric) {
     if (!GROWTH_LMS) return '<p class="muted center" style="padding:24px 0">성장도표 자료를 불러오지 못했어요.</p>';
-    var W = 560, H = 300, padL = 34, padR = 42, padT = 18, padB = 30;
+    var W = 560, H = 300, padL = 34, padR = 42, padT = 24, padB = 30;
     var x0 = GROWTH_LMS.fromMonth, x1 = GROWTH_LMS.toMonth;
     var series = GROWTH_PCTS.map(function (p) { return { pct: p, points: growthSeries(metric, p) }; });
     var pts = growthPoints(metric);
@@ -2529,7 +2529,7 @@
         '<text x="' + (bx + bw / 2).toFixed(1) + '" y="' + (by + 14).toFixed(1) + '" text-anchor="middle">' + esc(label) + '</text></g>');
     }
 
-    svg.push('<text class="gc-unit" x="' + (padL - 6) + '" y="' + (padT - 4) + '" text-anchor="end">' + growthUnit(metric) + '</text>');
+    svg.push('<text class="gc-unit" x="' + (padL - 6) + '" y="' + (padT - 8) + '" text-anchor="end">' + growthUnit(metric) + '</text>');
     svg.push("</svg>");
     return svg.join("");
   }

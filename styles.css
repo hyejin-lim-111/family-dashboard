@@ -913,6 +913,7 @@ h1, h2, h3, .title-font { font-family: var(--font-title); font-weight: 700; lett
   background: #FFF2EE; border: 1.5px solid #F7D6CD; border-radius: 999px;
   padding: 6px 12px; font-size: 12px; color: #C4594A;
 }
+.rec-bar[hidden] { display: none; }
 .rec-dot { width: 8px; height: 8px; border-radius: 50%; background: #E2654E; animation: pulse 1s infinite; }
 
 /* ---------------- 함께: 가족 달력 · 체크리스트 ---------------- */
@@ -1921,7 +1922,6 @@ body.alarm-on { overflow: hidden; }
   .chat-banner { max-width: 520px; }
 
   .growth-grid { grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr); gap: 14px; align-items: start; }
-  .growth-sum, .growth-chart { height: 100%; }
   .gs-value { font-size: 26px; }
   .gh-title { font-size: 20px; }
   .gc-plot { padding-top: 2px; }
