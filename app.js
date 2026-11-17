@@ -3277,7 +3277,11 @@
       var info = petInfo();
       if (char.getAttribute("src") !== info.stage.img) char.setAttribute("src", info.stage.img);
     }
-    if (bubble) bubble.textContent = (steps.length && doneCount === steps.length) ? "다 같이 다 했어! 최고야 🎉" : "다인이 같이 준비하자!";
+    if (bubble) {
+      // 말풍선은 캐릭터를 따라가되, 막대 밖으로 나가지 않게 안쪽에서만 움직여요
+      bubble.style.left = "max(76px, min(calc(22px + (100% - 44px) * " + (pct / 100) + "), calc(100% - 76px)))";
+      bubble.textContent = (steps.length && doneCount === steps.length) ? "다 같이 다 했어! 최고야 🎉" : "다인이 같이 준비하자!";
+    }
     setTextById("prepDoneCount", doneCount + " / " + steps.length + " 완료");
     var banner = qs("#prepDone");
     if (banner) banner.hidden = !(steps.length && doneCount === steps.length);
