@@ -5500,6 +5500,32 @@
     tip: prepGoingOutTip,
     defaults: { startTime: PREP_START_DEFAULT, departureTime: PREP_DEPART_DEFAULT }
   };
+  /* ---------- 앱처럼 설치(PWA) · 서비스 워커 ----------
+     GitHub Pages 서브경로(/family-dashboard/)에서도 동작하도록 상대 경로('./sw.js')로 등록해요.
+     새 버전이 준비되면 그 자리에서 활성화해서, 앱을 다시 설치하지 않아도 최신 화면이 떠요.
+     (브라우저가 지원하지 않거나 file:// 로 열었을 때는 조용히 넘어갑니다) */
+  function registerServiceWorker() {
+    if (!("serviceWorker" in navigator) || !window.isSecureContext) return;
+    try {
+      navigator.serviceWorker.register("./sw.js", { scope: "./" }).then(function (reg) {
+        if (reg.waiting) reg.waiting.postMessage("SKIP_WAITING");
+        reg.addEventListener("updatefound", function () {
+          var sw = reg.installing;
+          if (!sw) return;
+          sw.addEventListener("statechange", function () {
+            if (sw.state === "installed" && navigator.serviceWorker.controller) {
+              sw.postMessage("SKIP_WAITING");
+            }
+          });
+        });
+      }).catch(function (err) {
+        if (window.console && console.warn) console.warn("서비스 워커를 등록하지 못했어요", err);
+      });
+    } catch (e) {
+      if (window.console && console.warn) console.warn("서비스 워커를 쓸 수 없어요", e);
+    }
+  }
+
   function boot() {
     // 저장소는 "덮어쓰기"가 아니라 "병합"으로 저장해요.
     //  · getLocal: 이 기기가 지금 들고 있는 상태를 병합 때 바로 쓸 수 있게
@@ -5541,6 +5567,9 @@
       // 첫 렌더에서 날씨 카드 먼저 그려두기
       renderAll();
     });
+
+    // 앱처럼 설치해서 쓸 수 있게 (홈 화면에 추가) 서비스 워커 등록
+    registerServiceWorker();
   }
 
   boot();

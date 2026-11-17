@@ -12,6 +12,17 @@
 
 > 인터넷이 되어야 날씨·미세먼지를 불러와요 (성남시 분당구 기준). 그 외 기능은 오프라인에서도 동작해요.
 
+## 📱 앱처럼 설치해서 쓰기 (PWA)
+
+주소창 없는 **단독 앱**으로 홈 화면에 추가할 수 있어요. 주소: `https://hyejin-lim-111.github.io/family-dashboard/`
+
+- **안드로이드 폰·태블릿 (Chrome)**: 주소를 연 뒤 오른쪽 위 **⋮ → 홈 화면에 추가**(또는 ‘앱 설치’)를 누르면 끝.
+- **아이폰·아이패드 (Safari)**: 아래 **공유(⬆️) → 홈 화면에 추가**.
+- 한 번 설치하면 아이콘을 눌렀을 때 브라우저 주소창 없이 전체 화면으로 열려요.
+- **수정한 내용은 다시 설치하지 않아도** 다음에 앱을 열 때 자동으로 새 버전이 떠요(서비스 워커가 파일을 **Network-First**로 먼저 받아오고, 준비되면 바로 활성화).
+- 날씨·Supabase·공휴일 API 같은 **외부 주소는 서비스 워커가 캐시하지 않아요** — 늘 실시간 값을 받아옵니다.
+- 인터넷이 잠깐 끊겨도 마지막으로 받아 둔 화면이 열리고, 기록은 기기에 그대로 남아 있어요.
+
 ## 담긴 기능
 
 | 탭 | 내용 |
@@ -134,8 +145,11 @@ family-dashboard/
 ├── growth-data.js  2017 소아청소년 성장도표 여아 12~84개월 신장·체중 L·M·S 값
 ├── store.js        저장소 어댑터 (localStorage / Supabase 자동 전환) + 항목 단위 병합(3-way merge)
 ├── config.js       가족 정보·날씨 위치·Supabase 연결 값
+├── manifest.webmanifest  앱 설치 정보 (이름·아이콘·standalone)
+├── sw.js           서비스 워커 (Network-First · 외부 API 는 캐시 안 함)
 ├── favicon.png
 ├── assets/         캐릭터 그림 17종 (프로필 3 + 요정 8 + 성장 단계 6)
+│                   + 앱 아이콘(icon-192·icon-512·icon-maskable-512·apple-touch-icon)
 └── test/           동작 확인 테스트 (jsdom)
     ├── run-all.cjs        모든 테스트를 차례로 실행
     ├── static-check.cjs   문법·태그·CSS·data-action·자산 경로
@@ -148,7 +162,9 @@ family-dashboard/
     ├── growth-chat-test.cjs 성장도표·태어난 지·말판·사진·알림
     ├── quick-phrase-test.cjs 다인이 말판 직접 추가·삭제·되돌리기
     ├── pet-test.cjs       🐣 캐릭터 키우기(레벨업·돌보기·올클리어·단계별 성장)
-    └── holiday-weather-quiz-test.cjs  공휴일 빨간 날·주간 날씨·오늘의 퀴즈
+    ├── morning-prep-test.cjs  🎒 등원준비 4단계·출발 카운트다운
+    ├── holiday-weather-quiz-test.cjs  공휴일 빨간 날·주간 날씨·오늘의 퀴즈
+    └── pwa-test.cjs       📱 앱 설치(manifest·아이콘·서비스 워커·등록 코드)
 ```
 
 ## 기술 메모
@@ -174,4 +190,6 @@ family-dashboard/
 - 💰 용돈 누적·달력 테스트 ✓ (`test/allowance-test.cjs`, 42항목) — 날짜가 바뀌어도 어제 900원이 그대로 누적되는지, 오늘 적립액이 기록(`earned`)으로 굳는지, 루틴 항목을 넣거나 지워도 그날 돈이 사라지지 않는지, 체크를 풀어도 모은 돈이 줄지 않는지, 용돈 쓰기만큼만 줄고 쓴 날짜가 장부에 남는지, 달력 칸의 +900원·🎁·-300원 표시와 이번 달 합계·누적 잔액·이전/다음 달 이동, 예전 기록(적립액 필드 없음) 하위 호환, 여러 기기 병합에서 날짜별 적립·사용 기록이 유지되는지
 - 실행: `node test/run-all.cjs` (테스트는 jsdom 을 `/workspace/.cache/famdash-test/node_modules` 에서 불러온다)
 - 📅 공휴일 · 🌤️ 주간 날씨 · 🎈 오늘의 퀴즈 테스트 ✓ (`test/holiday-weather-quiz-test.cjs`, 77항목) — 2026·2027·2028 공휴일(설날 2/7, 대체휴일, 추석·개천절 같은 날) 내장 데이터, 세 달력의 빨간 숫자와 공휴일 이름, 주간 예보 7칸·요일·아이콘·최고/최저·강수 확률과 예전 캐시 자동 갱신, 퀴즈 3문제가 날짜로 고정되는지(기기마다 같음)·보기 채점·힌트·3문제 완료 시 도장 1개(하루 한 번)·저장/복원·기기 병합·예전 기록 하위 호환·오래된 퀴즈 기록 정리, `+ 공부 추가` 유지
+- 📱 앱 설치(PWA) 테스트 ✓ (`test/pwa-test.cjs`) — manifest 필수값(name·short_name·start_url·scope·standalone·theme/background)과 아이콘 192·512·maskable 실제 픽셀 크기, index.html 의 manifest·theme-color·apple-touch-icon 태그, sw.js 문법·Network-First 순서·외부 origin 미개입·skipWaiting/clients.claim, app.js 의 상대 경로 등록
+- 실제 라이브 페이지에서 manifest·아이콘 200 응답, 서비스 워커 ready, ‘Supabase 실시간 동기화 · 연결됨’, 콘솔 에러 0건 확인 ✓
 - Open-Meteo 두 엔드포인트(현재 날씨 + 대기질) 분당구 좌표로 실제 호출 확인 ✓ (예: 3.5°C, 구름 조금, pm10 46.9 / pm2.5 44.7)
