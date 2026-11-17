@@ -225,7 +225,7 @@ console.log("\n[12] 2026-11-17 추가 (공휴일 · 주간 날씨 · 오늘의 �
 
 console.log("\n[13] 2026-11-17 추가: 🎒 등원준비 (4단계 · 출발 카운트다운)");
 {
-  check("등원 탭 표시", /data-tab="prep"[\s\S]{0,120}🎒<\/span><span>등원/.test(html));
+  check("등원 탭 표시", /data-tab="prep"[\s\S]{0,200}🎒<\/span><span class="tab-label"><span class="tl-short">등원<\/span><span class="tl-long">등원준비/.test(html));
   check("단계 순서: 세수·양치 → 옷 입기 → 아침 먹기 → 가방 챙기기",
     /var PREP_STEPS_DEFAULT = \[[\s\S]*id: "p-wash"[\s\S]*id: "p-dress"[\s\S]*id: "p-meal"[\s\S]*id: "p-bag"/.test(app) &&
     app.indexOf("세수·양치") < app.indexOf("옷 입기") && app.indexOf("옷 입기") < app.indexOf("아침 먹기") && app.indexOf("아침 먹기") < app.indexOf("가방 챙기기"));

@@ -113,7 +113,7 @@ function yesterdayAllChecked(extra) {
   console.log("\n[1] 날짜가 바뀌어도 어제 900원이 그대로 누적");
   {
     const t = boot(yesterdayAllChecked());
-    await sleep(700);
+    await sleep(1300);
     check("부팅 오류 없음", t.errors.length === 0, t.errors.join(" / "));
     check("홈 카드에 900원", t.$("#allowanceTotal").textContent === "900원", t.$("#allowanceTotal").textContent);
     check("홈 카드 오늘 줄은 0 / 4", t.$("#allowanceToday").textContent.includes("0 / 4"), t.$("#allowanceToday").textContent);
@@ -134,7 +134,7 @@ function yesterdayAllChecked(extra) {
   console.log("\n[2] 용돈 달력");
   {
     const t = boot(yesterdayAllChecked());
-    await sleep(700);
+    await sleep(1300);
     t.click(t.$('.tab-btn[data-tab="mission"]'));
     await sleep(80);
     check("용돈 달력 카드 있음", !!t.$("#allowanceCalendar"));
@@ -173,7 +173,7 @@ function yesterdayAllChecked(extra) {
     days[TODAY] = { checked: all };
     days[YESTERDAY] = { checked: clone(all) };
     const t = boot(payload({ routine: { items: clone(SAMPLE), days: days, spent: 0, spends: [] } }));
-    await sleep(700);
+    await sleep(1300);
     check("오늘+어제 1,800원", t.$("#allowanceTotal").textContent === "1,800원", t.$("#allowanceTotal").textContent);
 
     t.click(t.$('.tab-btn[data-tab="mission"]'));
@@ -206,7 +206,7 @@ function yesterdayAllChecked(extra) {
   console.log("\n[4] 용돈 쓰기");
   {
     const t = boot(yesterdayAllChecked());
-    await sleep(700);
+    await sleep(1300);
     t.click(t.$('.tab-btn[data-tab="mission"]'));
     await sleep(80);
     t.click(t.$('[data-action="allowance-spend"]'));
@@ -243,7 +243,7 @@ function yesterdayAllChecked(extra) {
     delete legacy.routine.spends;
     legacy.routine.spent = 200;      // 장부 없이 숫자만 있던 시절의 사용액
     const t = boot(legacy);
-    await sleep(700);
+    await sleep(1300);
     check("어제 900 - 예전 사용 200 = 700원", t.$("#allowanceTotal").textContent === "700원", t.$("#allowanceTotal").textContent);
     t.click(t.$('.tab-btn[data-tab="mission"]'));
     await sleep(80);
