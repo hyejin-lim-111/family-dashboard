@@ -236,6 +236,23 @@
     { id: "r-brush",    name: "양치하기" }
   ];
 
+  /* ---------- 🎒 등원준비 (아침 준비 4단계) ---------- */
+  // 순서는 혜진님이 정하신 대로: ① 세수·양치 → ② 옷 입기 → ③ 아침 먹기 → ④ 가방 챙기기
+  var PREP_START_DEFAULT = "07:10";      // 준비 시작
+  var PREP_DEPART_DEFAULT = "08:00";     // 유치원 출발
+  var PREP_STEPS_DEFAULT = [
+    { id: "p-wash",  name: "세수·양치",   img: "assets/prep_wash.png?v=20261117" },
+    { id: "p-dress", name: "옷 입기",     img: "assets/prep_dress.png?v=20261117" },
+    { id: "p-meal",  name: "아침 먹기",   img: "assets/prep_breakfast.png?v=20261117" },
+    { id: "p-bag",   name: "가방 챙기기", img: "assets/prep_bag.png?v=20261117" }
+  ];
+  var PREP_STEP_IMG = {
+    "p-wash": "assets/prep_wash.png?v=20261117",
+    "p-dress": "assets/prep_dress.png?v=20261117",
+    "p-meal": "assets/prep_breakfast.png?v=20261117",
+    "p-bag": "assets/prep_bag.png?v=20261117"
+  };
+
   /* ---------- 🐣 내 캐릭터 키우기 (레벨업 · 돌보기) ---------- */
   var PET_NAME_DEFAULT = "몽실이";
   var PET_MONEY_PER_XP = 100;      // 모은 용돈 100원마다 경험치 1 (누적 적립 기준)
@@ -777,6 +794,7 @@
       growth: normalizeGrowth(null),        // 다인이 키·몸무게 성장 기록
       pet: normalizePet(null),              // 🐣 내 캐릭터(용돈·할 일로 자라는 요정)
       quiz: { answered: {}, rewarded: {} },  // 🎈 오늘의 퀴즈 — 맞힌 문제 / 도장 받은 날
+      morningPrep: normalizeMorningPrep(null), // 🎒 등원준비 — 시작·출발 시각, 4단계, 날짜별 완료
       settings: { weatherCache: null, notify: false }
     };
   }
@@ -816,6 +834,7 @@
     if (s.pet && (!s.pet.care || !s.pet.ledger)) { s.pet = normalizePet(s.pet); changed = true; }
     if (s.pet && petRoll(s.pet, today)) changed = true;
     if (!s.quiz || typeof s.quiz !== "object" || Array.isArray(s.quiz)) { s.quiz = { answered: {}, rewarded: {} }; changed = true; }
+    if (!s.morningPrep || typeof s.morningPrep !== "object") { s.morningPrep = normalizeMorningPrep(null); changed = true; }
     if (!s.settings || typeof s.settings !== "object") { s.settings = { weatherCache: null, notify: false }; changed = true; }
     if (s.settings.notify === undefined) { s.settings.notify = false; changed = true; }
     if (!s.members || !s.members.length) { s.members = JSON.parse(JSON.stringify(CFG.defaultMembers)); changed = true; }
@@ -827,7 +846,7 @@
     if (!s) s = freshState();
     // 알려진 필드만 유지 (이상한 데이터 방어)
     var out = freshState();
-    ["members", "study", "stamps", "badges", "dex", "mission", "todos", "chat", "quickPhrases", "calendar", "checklists", "routine", "growth", "pet", "quiz", "settings", "deleted"].forEach(function (k) {
+    ["members", "study", "stamps", "badges", "dex", "mission", "todos", "chat", "quickPhrases", "calendar", "checklists", "routine", "growth", "pet", "quiz", "morningPrep", "settings", "deleted"].forEach(function (k) {
       if (s[k] !== undefined) out[k] = s[k];
     });
     if (!out.deleted || typeof out.deleted !== "object" || Array.isArray(out.deleted)) out.deleted = {};
@@ -841,6 +860,7 @@
     out.growth = normalizeGrowth(out.growth);
     out.pet = normalizePet(out.pet);
     out.quiz = normalizeQuiz(out.quiz);
+    out.morningPrep = normalizeMorningPrep(out.morningPrep);
     return out;
   }
 
@@ -1386,6 +1406,7 @@
       "?latitude=" + w.lat + "&longitude=" + w.lon +
       "&current=temperature_2m,weather_code,relative_humidity_2m" +
       "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max" +
+      "&hourly=temperature_2m,precipitation_probability" +
       "&timezone=" + encodeURIComponent(w.timezone) +
       "&forecast_days=7";
     var aUrl = w.airUrl +
@@ -1411,6 +1432,21 @@
         });
       }
       var first = week[0] || {};
+      // 🎒 등원준비용 시간대별 기온·강수확률 (07·08·12·16·20시만 작게 보관)
+      var hourly = [];
+      var hObj = j.hourly || {};
+      var hTimes = Array.isArray(hObj.time) ? hObj.time : [];
+      for (var hi = 0; hi < hTimes.length; hi++) {
+        var hStr = String(hTimes[hi] || "");
+        var hHour = Number(hStr.slice(11, 13));
+        if ([7, 8, 12, 16, 20].indexOf(hHour) === -1) continue;
+        hourly.push({
+          date: hStr.slice(0, 10),
+          h: hHour,
+          temp: (Array.isArray(hObj.temperature_2m) && hObj.temperature_2m[hi] != null) ? hObj.temperature_2m[hi] : null,
+          pop: (Array.isArray(hObj.precipitation_probability) && hObj.precipitation_probability[hi] != null) ? Math.round(hObj.precipitation_probability[hi]) : null
+        });
+      }
       return {
         current: {
           temp: c.temperature_2m,
@@ -1420,6 +1456,7 @@
         min: (first.min != null) ? first.min : (d.temperature_2m_min && d.temperature_2m_min[0]),
         max: (first.max != null) ? first.max : (d.temperature_2m_max && d.temperature_2m_max[0]),
         week: week,
+        hourly: hourly,
         fetchedAt: Date.now(),
         fetchedLabel: fmtTime(new Date().toISOString())
       };
@@ -1439,6 +1476,7 @@
       if (!state.settings) state.settings = {};
       state.settings.weatherCache = weatherData;
       renderHomeWeather();
+      renderPrepWeather();
       persist();
     }).catch(function () {
       weatherUnavailable();
@@ -1465,6 +1503,7 @@
     setTextById("bigClockAmpm", h < 12 ? "오전" : "오후");
     setTextById("bigClock", pad2(hh) + ":" + pad2(now.getMinutes()) + ":" + pad2(now.getSeconds()));
     setTextById("bigClockDate", fmtDateKo(key) + " " + DOW_KO[dowOfKey(key)] + "요일");
+    tickPrep();          // 🎒 등원준비 — 큰 시계와 출발 카운트다운
     if (lastDayKey && lastDayKey !== key) {
       // 자정을 넘겼다 — 어제 적립액을 기록으로 굳히고 오늘 화면으로 새로 시작
       lastDayKey = key;
@@ -2976,6 +3015,448 @@
   }
 
   /* =========================================================
+     🎒 등원준비 — 아침 4단계 + 유치원 출발 카운트다운
+        · 기본 07:10 시작 → 08:00 출발 (설정에서 바꿀 수 있어요)
+        · 카드를 누르면 그 단계만 완료/해제되고, 진행 막대의 캐릭터는 완료 비율만큼 움직여요
+     ========================================================= */
+  function prepTimeValid(t) {
+    return /^([01]\d|2[0-3]):[0-5]\d$/.test(String(t || ""));
+  }
+
+  function prepMinutesOf(t) {
+    var m = /^(\d{1,2}):(\d{2})$/.exec(String(t || ""));
+    if (!m) return null;
+    var h = Number(m[1]);
+    var mi = Number(m[2]);
+    if (h > 23 || mi > 59) return null;
+    return h * 60 + mi;
+  }
+
+  // 430 → "7시 10분"
+  function prepShortKo(mins) {
+    if (mins == null) return "";
+    var h = Math.floor(mins / 60);
+    var m = mins % 60;
+    var hh = h % 12; if (hh === 0) hh = 12;
+    return hh + "시" + (m ? " " + m + "분" : "");
+  }
+
+  function normalizePrepSteps(list) {
+    var out = [];
+    (Array.isArray(list) ? list : []).forEach(function (it, i) {
+      if (!it || typeof it !== "object") return;
+      var id = String(it.id || "").trim();
+      if (!id) return;
+      if (out.some(function (x) { return x.id === id; })) return;
+      var fallback = PREP_STEPS_DEFAULT[i] || PREP_STEPS_DEFAULT[0];
+      var name = String(it.name || "").trim().slice(0, 16) || fallback.name;
+      var img = PREP_STEP_IMG[id] || (PREP_STEPS_DEFAULT.filter(function (x) { return x.img === it.img; })[0] || {}).img || fallback.img;
+      out.push({ id: id, name: name, img: img });
+    });
+    if (!out.length) out = JSON.parse(JSON.stringify(PREP_STEPS_DEFAULT));
+    return out.slice(0, 8);
+  }
+
+  function normalizePrepDays(days) {
+    var out = {};
+    var src = (days && typeof days === "object" && !Array.isArray(days)) ? days : {};
+    Object.keys(src).forEach(function (k) {
+      if (!isDateKey(k)) return;
+      var rec = src[k];
+      if (!rec || typeof rec !== "object") return;
+      var done = {};
+      var dm = (rec.done && typeof rec.done === "object") ? rec.done : null;
+      if (dm) Object.keys(dm).forEach(function (id) { if (dm[id]) done[String(id)] = true; });
+      (Array.isArray(rec.doneIds) ? rec.doneIds : []).forEach(function (id) {
+        if (id !== undefined && id !== null) done[String(id)] = true;
+      });
+      var next = { done: done };
+      if (typeof rec.updatedAt === "string") next.updatedAt = rec.updatedAt;
+      out[k] = next;
+    });
+    // 동기화 데이터가 끝없이 커지지 않게 최근 60일만 남긴다
+    var keys = Object.keys(out).sort();
+    if (keys.length > 60) keys.slice(0, keys.length - 60).forEach(function (k) { delete out[k]; });
+    return out;
+  }
+
+  function normalizeMorningPrep(raw) {
+    var r = (raw && typeof raw === "object" && !Array.isArray(raw)) ? raw : {};
+    var start = prepTimeValid(r.startTime) ? r.startTime : PREP_START_DEFAULT;
+    var depart = prepTimeValid(r.departureTime) ? r.departureTime : PREP_DEPART_DEFAULT;
+    var sm = prepMinutesOf(start);
+    var dm = prepMinutesOf(depart);
+    if (sm == null) sm = prepMinutesOf(PREP_START_DEFAULT);
+    if (dm == null || dm <= sm) { depart = PREP_DEPART_DEFAULT; dm = prepMinutesOf(depart); }
+    return {
+      startTime: start,
+      departureTime: depart,
+      steps: normalizePrepSteps(r.steps),
+      days: normalizePrepDays(r.days)
+    };
+  }
+
+  function prepState() {
+    if (!state.morningPrep) state.morningPrep = normalizeMorningPrep(null);
+    return state.morningPrep;
+  }
+
+  function prepSteps() { return prepState().steps; }
+
+  function prepDay(dateKey) {
+    var p = prepState();
+    var key = dateKey || todayKey();
+    if (!p.days[key] || typeof p.days[key] !== "object") p.days[key] = { done: {} };
+    if (!p.days[key].done || typeof p.days[key].done !== "object") p.days[key].done = {};
+    return p.days[key];
+  }
+
+  function prepStepById(id) {
+    return prepSteps().filter(function (s) { return s.id === id; })[0] || null;
+  }
+
+  function prepDoneIds(dateKey) {
+    var rec = prepDay(dateKey);
+    return prepSteps().filter(function (s) { return !!rec.done[s.id]; }).map(function (s) { return s.id; });
+  }
+
+  function prepDoneCount(dateKey) { return prepDoneIds(dateKey).length; }
+
+  function prepAllDone(dateKey) {
+    var n = prepSteps().length;
+    return n > 0 && prepDoneCount(dateKey) === n;
+  }
+
+  function prepToggle(id) {
+    if (!prepStepById(id)) return false;
+    var rec = prepDay(todayKey());
+    var was = !!rec.done[id];
+    if (was) delete rec.done[id];
+    else rec.done[id] = true;
+    rec.updatedAt = new Date().toISOString();
+    persist(true);
+    renderPrep();
+    return !was;
+  }
+
+  function prepClockParts(nowDate) {
+    var t = nowDate ? new Date(nowDate) : new Date();
+    var kst = new Date(t.getTime() + KST_OFFSET_MS);
+    return {
+      h: kst.getUTCHours(),
+      m: kst.getUTCMinutes(),
+      s: kst.getUTCSeconds(),
+      dow: kst.getUTCDay(),
+      key: kst.getUTCFullYear() + "-" + pad2(kst.getUTCMonth() + 1) + "-" + pad2(kst.getUTCDate())
+    };
+  }
+
+  // 지금 시각에 맞는 등원준비 안내 문구 (시작 전 / 준비 중 / 출발 이후 / 주말)
+  function prepStatus(nowDate, cfg) {
+    var c = cfg || prepState();
+    var startM = prepMinutesOf(c.startTime);
+    var departM = prepMinutesOf(c.departureTime);
+    if (startM == null) startM = prepMinutesOf(PREP_START_DEFAULT);
+    if (departM == null) departM = prepMinutesOf(PREP_DEPART_DEFAULT);
+    var cp = prepClockParts(nowDate);
+    var nowSec = cp.h * 3600 + cp.m * 60 + cp.s;
+    var startSec = startM * 60;
+    var departSec = departM * 60;
+    var startLabel = fmtTime12(c.startTime || PREP_START_DEFAULT);
+    var departLabel = fmtTime12(c.departureTime || PREP_DEPART_DEFAULT);
+    var startShort = prepShortKo(startM);
+    var nowLabel = fmtTime12(pad2(cp.h) + ":" + pad2(cp.m));
+    var base = { startLabel: startLabel, departLabel: departLabel, startTime: c.startTime, departureTime: c.departureTime, nowLabel: nowLabel };
+
+    if (cp.dow === 0 || cp.dow === 6) {
+      base.phase = "weekend";
+      base.minutesLeft = null;
+      base.headline = "주말이에요 — 오늘은 등원 없이 신나게 놀아요";
+      base.sub = "다음 등원 준비는 월요일 아침 " + startShort + "부터";
+      return base;
+    }
+    if (nowSec < startSec) {
+      var toStart = Math.ceil((startSec - nowSec) / 60);
+      var hh = Math.floor(toStart / 60);
+      var mm = toStart % 60;
+      base.phase = "before";
+      base.minutesLeft = toStart;
+      base.headline = startShort + "부터 등원 준비 시작!";
+      if (toStart <= 180) base.sub = hh ? (hh + "시간 " + (mm ? mm + "분 " : "") + "남았어요") : (mm ? mm + "분 뒤에 시작해요" : "이제 곧 시작해요");
+      else if (nowSec >= departSec) base.sub = "다음 준비는 내일 아침 " + startShort + "부터";
+      else base.sub = startLabel + "에 시작해요";
+      return base;
+    }
+    if (nowSec < departSec) {
+      var left = Math.ceil((departSec - nowSec) / 60);
+      base.phase = "ready";
+      base.minutesLeft = left;
+      base.headline = "유치원 출발까지 " + left + "분 남았어요";
+      base.sub = "지금 " + nowLabel + " · " + prepShortKo(startM) + "에 시작했어요";
+      return base;
+    }
+    base.phase = "go";
+    base.minutesLeft = 0;
+    base.headline = "출발 시간이에요! 오늘도 잘 다녀와";
+    base.sub = "다음 준비는 내일 아침 " + startShort + "부터";
+    return base;
+  }
+
+  // 나갈 때 한 줄 팁 — 기온·비·미세먼지를 한 문장으로
+  function prepGoingOutTip(cur, pm, hourly) {
+    var tips = [];
+    var pop = null;
+    (hourly || []).forEach(function (h) {
+      if (h && h.h === 8 && h.pop != null) pop = h.pop;
+    });
+    var code = cur ? Number(cur.code) : null;
+    var rainy = (code >= 51 && code <= 67) || (code >= 80 && code <= 82) || (code != null && code >= 95);
+    if (rainy) tips.push("우산 챙겨요");
+    else if (pop != null && pop >= 40) tips.push("우산 챙겨요 (비 " + pop + "%)");
+    var t = cur ? Number(cur.temp) : null;
+    if (t != null && isFinite(t)) {
+      if (t <= 5) tips.push("두꺼운 겉옷과 장갑");
+      else if (t <= 11) tips.push("따뜻한 겉옷 한 겹");
+      else if (t <= 17) tips.push("가벼운 겉옷");
+      else if (t >= 28) tips.push("시원한 옷과 물");
+    }
+    if (pm && pm.rep && (pm.rep.key === "warn" || pm.rep.key === "bad" || pm.rep.key === "worst")) tips.push("마스크 챙겨요");
+    if (!tips.length) tips.push("오늘은 가볍게 나서도 좋아요");
+    return tips.join(" · ");
+  }
+
+  function prepWeatherHtml() {
+    var cache = state.settings && state.settings.weatherCache;
+    if (!cache || !cache.current) {
+      return '<div class="prep-wx-empty">🌡️ <b>' + esc(CFG.weather.name) + '</b> 날씨 불러오는 중…</div>';
+    }
+    var cur = cache.current;
+    var info = weatherCodeInfo(cur.code);
+    var pm = cache.air ? pmLevelInfo(cache.air.pm10, cache.air.pm25) : null;
+    var today = todayKey();
+    var hourly = (Array.isArray(cache.hourly) ? cache.hourly : []).filter(function (x) { return x && x.date === today; });
+    var slots = [8, 12, 16, 20].map(function (h) {
+      var hit = hourly.filter(function (x) { return x.h === h; })[0];
+      return '<div class="prep-hour"><span class="ph-h">' + h + '시</span>' +
+        '<span class="ph-t">' + (hit && hit.temp != null ? Math.round(hit.temp) + "°" : "-") + '</span>' +
+        '<span class="ph-p">' + (hit && hit.pop != null ? "☔" + hit.pop + "%" : "·") + '</span></div>';
+    }).join("");
+
+    return '<div class="prep-wx-place">📍 ' + esc(CFG.weather.name) + '</div>' +
+      '<div class="prep-wx-top">' +
+        '<span class="prep-wx-emoji" aria-hidden="true">' + info.icon + '</span>' +
+        '<div class="prep-wx-main"><div class="prep-wx-temp">' + (cur.temp != null ? Math.round(cur.temp) + '<sup>°</sup>' : "--") + '</div>' +
+          '<div class="prep-wx-cond">' + esc(info.label) + '</div></div>' +
+        '<div class="prep-wx-side">' +
+          (pm ? '<span class="badge ' + pm.rep.key + '"><span class="dot"></span>미세먼지 <b>' + esc(pm.rep.label) + '</b></span>' : '') +
+          '<span class="prep-wx-range">최고 ' + (cache.max != null ? Math.round(cache.max) + "°" : "-") + ' · 최저 ' + (cache.min != null ? Math.round(cache.min) + "°" : "-") + '</span>' +
+          '<button class="prep-wx-refresh" type="button" data-action="prep-refresh-weather" aria-label="날씨 새로고침" title="새로고침">↻</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="prep-wx-hours">' + slots + '</div>' +
+      '<div class="prep-wx-tip"><span>👟 나갈 때</span> ' + esc(prepGoingOutTip(cur, pm, hourly)) + '</div>';
+  }
+
+  function renderPrepWeather() {
+    var box = qs("#prepWeather");
+    if (!box) return;
+    box.innerHTML = prepWeatherHtml();
+  }
+
+  function paintPrepBar() {
+    var steps = prepSteps();
+    var doneMap = prepDay(todayKey()).done;
+    var doneCount = steps.filter(function (s) { return !!doneMap[s.id]; }).length;
+    var pct = steps.length ? Math.round(doneCount / steps.length * 100) : 0;
+    var fill = qs("#prepFill");
+    var char = qs("#prepChar");
+    var bubble = qs("#prepBubble");
+    if (fill) fill.style.width = pct + "%";
+    if (char) {
+      char.style.left = "calc(22px + (100% - 44px) * " + (pct / 100) + ")";
+      var info = petInfo();
+      if (char.getAttribute("src") !== info.stage.img) char.setAttribute("src", info.stage.img);
+    }
+    if (bubble) bubble.textContent = (steps.length && doneCount === steps.length) ? "다 같이 다 했어! 최고야 🎉" : "다인이 같이 준비하자!";
+    setTextById("prepDoneCount", doneCount + " / " + steps.length + " 완료");
+    var banner = qs("#prepDone");
+    if (banner) banner.hidden = !(steps.length && doneCount === steps.length);
+    var track = qs("#prepTrack");
+    if (track) track.setAttribute("aria-label", "등원 준비 " + doneCount + " / " + steps.length + " 완료");
+  }
+
+  function tickPrep() {
+    if (!qs("#prepClock")) return;
+    var cp = prepClockParts();
+    var hh = cp.h % 12; if (hh === 0) hh = 12;
+    setTextById("prepClockAmpm", cp.h < 12 ? "오전" : "오후");
+    setTextById("prepClock", pad2(hh) + ":" + pad2(cp.m));
+    setTextById("prepDate", fmtDateKo(cp.key) + " " + DOW_KO[cp.dow] + "요일");
+    var st = prepStatus();
+    setTextById("prepHeadline", st.headline);
+    setTextById("prepSub", st.sub);
+    var card = qs("#prepCountCard");
+    if (card) {
+      card.classList.toggle("is-ready", st.phase === "ready");
+      card.classList.toggle("is-go", st.phase === "go");
+      card.classList.toggle("is-weekend", st.phase === "weekend");
+    }
+  }
+
+  function renderPrep() {
+    var root = qs("#prepContent");
+    if (!root) return;
+    var steps = prepSteps();
+    var st = prepState();
+    var doneMap = prepDay(todayKey()).done;
+    var doneCount = steps.filter(function (s) { return !!doneMap[s.id]; }).length;
+    var current = steps.filter(function (s) { return !doneMap[s.id]; })[0] || null;
+    var pet = petInfo();
+    var allDone = steps.length > 0 && doneCount === steps.length;
+    var startLabel = fmtTime12(st.startTime);
+    var departLabel = fmtTime12(st.departureTime);
+
+    var cards = steps.map(function (s, i) {
+      var isDone = !!doneMap[s.id];
+      var isCurrent = !isDone && current && current.id === s.id;
+      return '<button class="prep-card' + (isDone ? " is-done" : "") + (isCurrent ? " is-current" : "") + '" type="button" ' +
+          'data-action="prep-toggle" data-id="' + esc(s.id) + '" aria-pressed="' + (isDone ? "true" : "false") + '" ' +
+          'aria-label="' + esc((i + 1) + "번 " + s.name + (isDone ? " — 완료, 누르면 다시 해요" : " — 누르면 완료")) + '">' +
+        '<span class="prep-num">' + (i + 1) + '</span>' +
+        (isCurrent ? '<span class="prep-badge">같이 하자!</span>' : '') +
+        (isCurrent ? '<img class="prep-pal" src="' + esc(pet.stage.img) + '" alt="">' : '') +
+        '<span class="prep-art-wrap"><img class="prep-art" src="' + esc(s.img) + '" alt="' + esc(s.name) + '" loading="lazy"></span>' +
+        '<span class="prep-name">' + esc(s.name) + '</span>' +
+        '<span class="prep-stamp" aria-hidden="true">✓</span>' +
+        '<span class="prep-done-tag">완료!</span>' +
+      '</button>';
+    }).join("");
+
+    root.innerHTML =
+      '<div class="card tight prep-top">' +
+        '<div class="prep-clock">' +
+          '<p class="prep-date" id="prepDate"></p>' +
+          '<p class="prep-time"><span class="prep-ampm" id="prepClockAmpm">오전</span><span class="prep-big" id="prepClock">--:--</span></p>' +
+        '</div>' +
+        '<div class="prep-wx" id="prepWeather"></div>' +
+      '</div>' +
+
+      '<div class="card tight prep-count" id="prepCountCard">' +
+        '<div class="prep-count-head">' +
+          '<div class="grow">' +
+            '<p class="prep-kicker">🏫 유치원 출발까지</p>' +
+            '<p class="prep-headline" id="prepHeadline">…</p>' +
+            '<p class="prep-sub" id="prepSub"></p>' +
+          '</div>' +
+          '<button class="btn btn-xs btn-ghost prep-time-btn" type="button" data-action="prep-time" aria-label="등원 준비 시간 설정">⏱ 시간 설정</button>' +
+        '</div>' +
+        '<div class="prep-track" id="prepTrack" role="img" aria-label="등원 준비 진행">' +
+          '<div class="prep-fill" id="prepFill"></div>' +
+          '<span class="prep-bubble" id="prepBubble">다인이 같이 준비하자!</span>' +
+          '<img class="prep-char" id="prepChar" src="' + esc(pet.stage.img) + '" alt="">' +
+          '<span class="prep-school" aria-hidden="true">🏫</span>' +
+        '</div>' +
+        '<div class="prep-meta">' +
+          '<span id="prepDoneCount">0 / 4 완료</span>' +
+          '<span>시작 <b>' + esc(startLabel) + '</b> · 출발 <b>' + esc(departLabel) + '</b></span>' +
+        '</div>' +
+      '</div>' +
+
+      '<div class="prep-done-banner" id="prepDone" hidden>' +
+        '<span class="pdb-emoji" aria-hidden="true">🎉</span>' +
+        '<div><b>오늘 등원 준비 완료!</b><span>다인이 혼자서 척척 — 유치원 잘 다녀와 💗</span></div>' +
+      '</div>' +
+
+      '<div class="section-head">' +
+        '<div class="section-title"><span class="ico">🎒</span>오늘의 등원 준비</div>' +
+        '<span class="section-note">끝낸 단계 카드를 눌러요</span>' +
+      '</div>' +
+      '<div class="prep-grid" id="prepCards">' + cards + '</div>' +
+
+      '<div class="prep-tools">' +
+        '<button class="btn btn-xs btn-soft" type="button" data-action="prep-edit">✏️ 단계 문구 편집</button>' +
+        '<button class="btn btn-xs btn-ghost" type="button" data-action="prep-reset">↺ 오늘 초기화</button>' +
+      '</div>' +
+      '<p class="muted center" style="font-size:11.5px">' + esc(startLabel) + '에 시작해서 ' + esc(departLabel) + '에 출발해요 · 시간과 문구는 위 버튼에서 바꿀 수 있어요</p>';
+
+    renderPrepWeather();
+    tickPrep();
+    paintPrepBar();
+    qsa("#prepCards .prep-card").forEach(function (b) {
+      b.style.animationDelay = "0ms";
+    });
+  }
+
+  function openPrepTime() {
+    var p = prepState();
+    openModal(
+      '<p class="muted" style="font-size:12.5px">매일 아침 이 시간에 맞춰 자동으로 안내해요. 기본은 ' + esc(fmtTime12(PREP_START_DEFAULT)) + ' 시작 · ' + esc(fmtTime12(PREP_DEPART_DEFAULT)) + ' 출발이에요.</p>' +
+      '<div class="field"><label for="prepStart">준비 시작 시각</label><input type="time" id="prepStart" value="' + esc(p.startTime) + '"></div>' +
+      '<div class="field"><label for="prepDepart">유치원 출발 시각</label><input type="time" id="prepDepart" value="' + esc(p.departureTime) + '"></div>' +
+      '<div class="modal-actions">' +
+        '<button class="btn btn-ghost" type="button" data-action="close-modal">취소</button>' +
+        '<button class="btn btn-primary" type="button" id="prepTimeSaveBtn">저장</button>' +
+      '</div>',
+      { title: "등원 준비 시간 설정" }
+    );
+    qs("#prepTimeSaveBtn").addEventListener("click", function () {
+      var s = qs("#prepStart").value;
+      var d = qs("#prepDepart").value;
+      if (!prepTimeValid(s) || !prepTimeValid(d)) { toast("시각을 골라 주세요", "⏱"); return; }
+      if (prepMinutesOf(d) <= prepMinutesOf(s)) { toast("출발 시각은 시작 시각보다 늦어야 해요", "⏱"); return; }
+      var p2 = prepState();
+      p2.startTime = s;
+      p2.departureTime = d;
+      closeModal();
+      persist(true);
+      renderPrep();
+      toast("등원 준비 " + fmtTime12(s) + " 시작 · " + fmtTime12(d) + " 출발로 바꿨어요", "🎒");
+    });
+  }
+
+  function openPrepEdit() {
+    var steps = prepSteps();
+    openModal(
+      '<p class="muted" style="font-size:12.5px">다인이에게 보여 줄 단계 이름을 적어 주세요. 그림과 순서는 그대로예요.</p>' +
+      steps.map(function (s, i) {
+        return '<div class="field"><label for="prepName' + i + '">' + (i + 1) + '번 단계</label>' +
+          '<input type="text" id="prepName' + i + '" maxlength="16" value="' + esc(s.name) + '" placeholder="' + esc(PREP_STEPS_DEFAULT[i] ? PREP_STEPS_DEFAULT[i].name : "준비") + '"></div>';
+      }).join("") +
+      '<div class="modal-actions">' +
+        '<button class="btn btn-ghost" type="button" data-action="prep-edit-reset">기본 문구로</button>' +
+        '<button class="btn btn-ghost" type="button" data-action="close-modal">취소</button>' +
+        '<button class="btn btn-primary" type="button" id="prepEditSaveBtn">저장</button>' +
+      '</div>',
+      { title: "등원 준비 단계 문구" }
+    );
+    qs("#prepEditSaveBtn").addEventListener("click", function () {
+      var p = prepState();
+      var names = steps.map(function (s, i) {
+        var inp = qs("#prepName" + i);
+        var v = inp ? String(inp.value || "").trim().slice(0, 16) : "";
+        return v || (PREP_STEPS_DEFAULT[i] ? PREP_STEPS_DEFAULT[i].name : s.name);
+      });
+      p.steps = p.steps.map(function (s, i) { return { id: s.id, name: names[i] || s.name, img: s.img }; });
+      closeModal();
+      persist(true);
+      renderPrep();
+      toast("단계 문구를 저장했어요", "✏️");
+    });
+  }
+
+  function resetPrepToday() {
+    var n = prepDoneCount();
+    confirmModal("오늘 등원 준비 초기화", n ? "오늘 완료한 " + n + "단계를 모두 풀고 처음부터 다시 시작해요. 지난 날 기록은 그대로 남아요." : "오늘 완료한 단계가 없어요. 그래도 처음부터 다시 시작할까요?", "초기화", function () {
+      var rec = prepDay(todayKey());
+      rec.done = {};
+      rec.updatedAt = new Date().toISOString();
+      persist(true);
+      renderPrep();
+      toast("오늘 등원 준비를 처음부터 다시 시작해요", "↺");
+    });
+  }
+
+  /* =========================================================
      함께 — 가족 달력 + 함께 체크리스트
      ========================================================= */
   var TOGETHER_SUB = "calendar";
@@ -4408,10 +4889,12 @@
       setTimeout(function () { petNewLevel = 0; paintPetBadge(); }, 3200);
     }
     if (tab === "home") { renderHomeWeather(); fetchWeather(false); }
+    if (tab === "prep") { renderPrep(); fetchWeather(false); }
   }
 
   function renderAll() {
     renderHome();
+    renderPrep();
     renderStudy();
     renderPet();
     renderMission();
@@ -4457,6 +4940,35 @@
 
       /* weather */
       case "refresh-weather": fetchWeather(true); toast("날씨를 새로 받아왔어요", "🌦️"); break;
+
+      /* 🎒 등원준비 */
+      case "prep-toggle": {
+        var prepId = btn.getAttribute("data-id");
+        var prepStep = prepStepById(prepId);
+        if (!prepStep) break;
+        var prepNowDone = prepToggle(prepId);
+        var prepLeft = prepSteps().length - prepDoneCount();
+        if (prepNowDone && prepLeft === 0) {
+          toast("등원 준비 모두 완료! 다인이 정말 잘했어요 🎉", "🎒");
+        } else if (prepNowDone) {
+          toast("『" + prepStep.name + "』 완료! " + prepLeft + "개 남았어요", "✅");
+        } else {
+          toast("『" + prepStep.name + "』를 다시 할래요?", "🔁");
+        }
+        break;
+      }
+      case "prep-time": openPrepTime(); break;
+      case "prep-edit": openPrepEdit(); break;
+      case "prep-edit-reset": {
+        PREP_STEPS_DEFAULT.forEach(function (s, i) {
+          var inp = qs("#prepName" + i);
+          if (inp) inp.value = s.name;
+        });
+        toast("기본 문구로 채웠어요 — 저장을 눌러요", "✏️");
+        break;
+      }
+      case "prep-reset": resetPrepToday(); break;
+      case "prep-refresh-weather": fetchWeather(true); toast("등원 날씨를 새로 받아왔어요", "🌦️"); break;
 
       /* study */
       case "add-study": openStudyModal(null); break;
@@ -4976,6 +5488,14 @@
   });
 
   /* ---------- 시작 ---------- */
+  // 테스트에서 시각별 안내 문구를 확인할 수 있게 작은 도구를 열어 둔다 (화면에는 영향 없음)
+  window.FamilyPrep = {
+    status: function (date, cfg) {
+      return prepStatus(date, cfg || { startTime: PREP_START_DEFAULT, departureTime: PREP_DEPART_DEFAULT });
+    },
+    tip: prepGoingOutTip,
+    defaults: { startTime: PREP_START_DEFAULT, departureTime: PREP_DEPART_DEFAULT }
+  };
   function boot() {
     // 저장소는 "덮어쓰기"가 아니라 "병합"으로 저장해요.
     //  · getLocal: 이 기기가 지금 들고 있는 상태를 병합 때 바로 쓸 수 있게

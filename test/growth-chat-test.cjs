@@ -95,10 +95,10 @@ const basePayload = {
   const activeView = () => $(".view.is-active").getAttribute("data-view");
   const saved = () => JSON.parse(window.localStorage.getItem("family-dashboard.state.v1")).payload;
 
-  console.log("\n[1] 부팅 · 하단 탭 7개");
+  console.log("\n[1] 부팅 · 하단 탭 8개");
   check("부팅 오류 없음", errors.length === 0, errors.join(" / "));
-  check("탭 7개", $$(".tab-btn").length === 7, "got " + $$(".tab-btn").length);
-  check("성장 탭이 채팅 앞", $$(".tab-btn").map((b) => b.getAttribute("data-tab")).join(",") === "home,study,pet,mission,together,growth,chat",
+  check("탭 8개", $$(".tab-btn").length === 8, "got " + $$(".tab-btn").length);
+  check("성장 탭이 채팅 앞", $$(".tab-btn").map((b) => b.getAttribute("data-tab")).join(",") === "home,prep,study,pet,mission,together,growth,chat",
     $$(".tab-btn").map((b) => b.getAttribute("data-tab")).join(","));
   check("성장 탭 아이콘 📏", $('.tab-btn[data-tab="growth"] .tab-ico').textContent === "📏");
 

@@ -165,7 +165,7 @@ function check(name, cond, extra) {
   click($('.tab-btn[data-tab="pet"]'));
   await sleep(150);
   check("키우기 탭 활성", active() === "pet");
-  check("하단 탭 7개 유지", $$(".tab-btn").length === 7, "got " + $$(".tab-btn").length);
+  check("하단 탭 8개 유지", $$(".tab-btn").length === 8, "got " + $$(".tab-btn").length);
   check("내 캐릭터가 보임", !!$("#petHero") && !!$("#petImg"));
   check("처음은 Lv.1 알 단계", $(".pet-stage-line").textContent.includes("Lv.1 알"), $(".pet-stage-line").textContent);
   check("단계 그림 6장", $$(".pet-stage").length === 6, "got " + $$(".pet-stage").length);
@@ -242,7 +242,7 @@ function check(name, cond, extra) {
   click($('.tab-btn[data-tab="together"]'));
   await sleep(60);
   check("함께 탭 활성", active() === "together");
-  check("하단 탭 7개", $$(".tab-btn").length === 7, "got " + $$(".tab-btn").length);
+  check("하단 탭 8개", $$(".tab-btn").length === 8, "got " + $$(".tab-btn").length);
   check("기본 화면은 달력", $("#togetherContent").getAttribute("data-sub") === "calendar");
   check("달력 42칸", $$(".cal-cell").length === 42, "got " + $$(".cal-cell").length);
   check("요일 머리글 7개", $$("#togetherContent .cal-dow span").length === 7);

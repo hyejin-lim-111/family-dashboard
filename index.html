@@ -16,7 +16,7 @@
 <!-- 본문 글씨: Pretendard (깨끗한 고딕) + Noto Sans KR 폴백 -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&display=swap">
-<link rel="stylesheet" href="styles.css?v=20261117c">
+<link rel="stylesheet" href="styles.css?v=20261117d">
 </head>
 <body>
 
@@ -63,6 +63,11 @@
     <!-- 홈 -->
     <section class="view is-active" id="view-home" data-view="home" aria-label="홈">
       <div class="stack" id="homeContent"></div>
+    </section>
+
+    <!-- 🎒 등원준비 -->
+    <section class="view" id="view-prep" data-view="prep" aria-label="등원준비">
+      <div class="stack" id="prepContent"></div>
     </section>
 
     <!-- 공부 / 루틴 -->
@@ -143,6 +148,9 @@
     <button class="tab-btn is-active" type="button" role="tab" data-action="tab" data-tab="home" aria-selected="true">
       <span class="tab-ico">🏡</span><span>홈</span>
     </button>
+    <button class="tab-btn" type="button" role="tab" data-action="tab" data-tab="prep" aria-selected="false" aria-label="등원준비">
+      <span class="tab-ico">🎒</span><span>등원</span>
+    </button>
     <button class="tab-btn" type="button" role="tab" data-action="tab" data-tab="study" aria-selected="false">
       <span class="tab-ico">📖</span><span>공부</span>
     </button>
@@ -186,9 +194,9 @@
 
 <script src="config.js"></script>
 <script src="growth-data.js"></script>
-<script src="holidays.js?v=20261117c"></script>
-<script src="quizzes.js?v=20261117c"></script>
-<script src="store.js?v=20261117c"></script>
-<script src="app.js?v=20261117c"></script>
+<script src="holidays.js?v=20261117d"></script>
+<script src="quizzes.js?v=20261117d"></script>
+<script src="store.js?v=20261117d"></script>
+<script src="app.js?v=20261117d"></script>
 </body>
 </html>

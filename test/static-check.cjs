@@ -102,8 +102,9 @@ console.log("\n[5] 로컬 자산 경로");
 
 console.log("\n[6] 화면 골격");
 {
-  check("탭 7개", (html.match(/class="tab-btn/g) || []).length === 7, String((html.match(/class="tab-btn/g) || []).length));
-  check("뷰 7개", (html.match(/data-view="/g) || []).length === 7, String((html.match(/data-view="/g) || []).length));
+  check("탭 8개", (html.match(/class="tab-btn/g) || []).length === 8, String((html.match(/class="tab-btn/g) || []).length));
+  check("뷰 8개", (html.match(/data-view="/g) || []).length === 8, String((html.match(/data-view="/g) || []).length));
+  check("등원준비 뷰 존재", /data-view="prep"/.test(html) && /id="view-prep"/.test(html));
   check("함께 뷰 존재", /data-view="together"/.test(html));
   check("성장 뷰 존재", /data-view="growth"/.test(html));
   check("config.js 키 보존", /sb_publishable_OJHJjHENxITeZVor5C9PiA_-9QMxUaC/.test(read("config.js")));
@@ -188,7 +189,7 @@ console.log("\n[10] 🐣 내 캐릭터 키우기 (도감 탭 교체)");
   check("돌보기 3종(밥·놀기·쓰다듬기)", /var PET_CARE = \{/.test(app) && /label: "밥 주기"/.test(app) && /label: "놀아주기"/.test(app) && /label: "쓰다듬기"/.test(app));
   check("게이지 3종(포만감·기분·친밀도)", /포만감/.test(app) && /친밀도/.test(app) && /function renderPet\(\)/.test(app));
   check("올클리어 간식", /function petClaimBonus\(\)/.test(app) && /올클리어/.test(app));
-  check("state.pet 저장·정규화", /pet: normalizePet\(null\)/.test(app) && /out\.pet = normalizePet\(out\.pet\)/.test(app) && /"pet", "quiz", "settings"/.test(app));
+  check("state.pet 저장·정규화", /pet: normalizePet\(null\)/.test(app) && /out\.pet = normalizePet\(out\.pet\)/.test(app) && /"pet", "quiz"[\s\S]{0,60}"settings"/.test(app));
   check("홈 미니 카드", /class="home-pet"/.test(app) && /class="hg-avatar"/.test(app));
   check("키우기 탭 스타일", /\.pet-hero-card\s*\{/.test(css) && /\.pet-care-btn\s*\{/.test(css) && /\.pet-quest\s*\{/.test(css) && /\.pet-stage\s*\{/.test(css) && /\.home-pet\s*\{/.test(css));
   check("단계별 반응 애니메이션", /@keyframes petJump/.test(css) && /@keyframes petSparkle/.test(css));
@@ -220,6 +221,27 @@ console.log("\n[12] 2026-11-17 추가 (공휴일 · 주간 날씨 · 오늘의 �
   check("퀴즈 보기·힌트·도장 연결", /case "quiz-pick"/.test(app) && /case "quiz-hint"/.test(app) && /quizState\(\)\.rewarded\[qDay\] = true/.test(app));
   check("퀴즈 문제 30개 이상", (quizzes.match(/id: "q-/g) || []).length >= 30, String((quizzes.match(/id: "q-/g) || []).length));
   check("공부 추가 버튼 유지", /data-action="add-study"/.test(app) && /\+ 공부 추가/.test(app));
+}
+
+console.log("\n[13] 2026-11-17 추가: 🎒 등원준비 (4단계 · 출발 카운트다운)");
+{
+  check("등원 탭 표시", /data-tab="prep"[\s\S]{0,120}🎒<\/span><span>등원/.test(html));
+  check("단계 순서: 세수·양치 → 옷 입기 → 아침 먹기 → 가방 챙기기",
+    /var PREP_STEPS_DEFAULT = \[[\s\S]*id: "p-wash"[\s\S]*id: "p-dress"[\s\S]*id: "p-meal"[\s\S]*id: "p-bag"/.test(app) &&
+    app.indexOf("세수·양치") < app.indexOf("옷 입기") && app.indexOf("옷 입기") < app.indexOf("아침 먹기") && app.indexOf("아침 먹기") < app.indexOf("가방 챙기기"));
+  check("시작 07:10 · 출발 08:00 기본", /PREP_START_DEFAULT = "07:10"/.test(app) && /PREP_DEPART_DEFAULT = "08:00"/.test(app));
+  check("단계 일러스트 4장 파일 존재", ["prep_wash", "prep_dress", "prep_breakfast", "prep_bag"].every((n) => fs.existsSync(path.join(ROOT, "assets/" + n + ".png"))));
+  check("저작권 캐릭터 미사용", !/피카츄|포켓몬|이상해씨|푸린|산리오|티니핑/.test(app));
+  check("카드 선택으로 완료·해제", /case "prep-toggle"/.test(app) && /function prepToggle\(/.test(app) && /aria-pressed/.test(app));
+  check("첫 미완료 단계에 같이 하자 배지", /data-action="prep-toggle"[\s\S]{0,400}같이 하자!/.test(app) && /\.prep-badge/.test(css));
+  check("완료 도장·색 변화", /\.prep-card\.is-done\s*\{/.test(css) && /\.prep-stamp/.test(css) && /\.prep-done-tag/.test(css));
+  check("진행 막대 캐릭터가 완료 비율만큼 이동", /function paintPrepBar\(/.test(app) && /\.prep-char\s*\{[^}]*transition: left/.test(css));
+  check("단계 모두 완료 축하 배너", /id="prepDone"/.test(app) && /\.prep-done-banner/.test(css));
+  check("시간 설정·문구 편집·오늘 초기화 연결", /case "prep-time"/.test(app) && /case "prep-edit"/.test(app) && /case "prep-reset"/.test(app) && /function openPrepTime\(/.test(app) && /function openPrepEdit\(/.test(app));
+  check("시간대별 날씨·나갈 때 한 줄 팁", /hourly=temperature_2m,precipitation_probability/.test(app) && /function prepGoingOutTip\(/.test(app) && /\.prep-wx-tip/.test(css));
+  check("state.morningPrep 기본값·정규화", /morningPrep: normalizeMorningPrep\(null\)/.test(app) && /out\.morningPrep = normalizeMorningPrep\(out\.morningPrep\)/.test(app));
+  check("store 3-way 병합 규칙", /case "morningPrep": return mergeMorningPrep/.test(read("store.js")) && /function mergePrepDays/.test(read("store.js")));
+  check("태블릿 4열 · 폰 2×2", /\.prep-grid\s*\{[^}]*repeat\(2/.test(css) && /@media \(min-width: 720px\)[\s\S]{0,2000}\.prep-grid\s*\{[^}]*repeat\(4/.test(css));
 }
 
 console.log("\n================================");

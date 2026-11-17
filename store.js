@@ -69,7 +69,7 @@
      → 오래 열어 둔 기기가 옛 복사본으로 저장해도 다른 기기의 새 채팅·일정이 살아남는다.
      ========================================================= */
 
-  var TOMBSTONE_KEYS = ["chat", "events", "lists", "listItems", "routineItems", "growth", "study", "todos", "quickCustom"];
+  var TOMBSTONE_KEYS = ["chat", "events", "lists", "listItems", "routineItems", "prepSteps", "growth", "study", "todos", "quickCustom"];
   var TOMBSTONE_KEEP_DAYS = 120;
   var TOMBSTONE_MAX = 600;
 
@@ -158,6 +158,7 @@
       case "mission": return mergeMission(base, local, remote, ctx);
       case "study": return mergeStudy(base, local, remote, ctx);
       case "routine": return mergeRoutine(base, local, remote, ctx);
+      case "morningPrep": return mergeMorningPrep(base, local, remote, ctx);
       case "chat": return mergeChat(base, local, remote, ctx);
       case "deleted": return mergeTombstones(base, local, remote);
       case "quickPhrases.hidden": return mergeTagList(base, local, remote, ctx);
@@ -393,6 +394,57 @@
     return out;
   }
 
+  /* ---------- 🎒 등원준비 ----------
+     · 시작·출발 시각은 3-way (한 기기에서 시작, 다른 기기에서 출발을 바꿔도 둘 다 남는다)
+     · 단계 목록은 id 기준 합집합 — 문구를 고친 쪽이 반영되고, 지운 단계는 지운 채로
+     · 날짜별 완료는 단계별 3-way — 한 기기에서 누른 완료가 다른 기기의 저장으로 풀리지 않는다 */
+  function mergePrepDays(b, l, r, ctx) {
+    var out = {};
+    var keys = [];
+    [r && r.days, l && l.days, b && b.days].forEach(function (o) {
+      eachKeys(o, function (k) {
+        if (keys.indexOf(k) === -1) keys.push(k);
+      });
+    });
+    keys.forEach(function (k) {
+      var bd = isPlainObject(b && b.days && b.days[k]) ? b.days[k] : null;
+      var ld = isPlainObject(l && l.days && l.days[k]) ? l.days[k] : null;
+      var rd = isPlainObject(r && r.days && r.days[k]) ? r.days[k] : null;
+      if (!ld && !rd) return;                        // 양쪽 다 지운 날 → 지운 채로
+      if (!ld) { out[k] = cloneValue(rd); return; }  // 이 기기에만 없던 날 → 서버 기록 살린다
+      if (!rd) { out[k] = cloneValue(ld); return; }
+      var done = mergeChecked(bd && bd.done, ld.done, rd.done, ctx);
+      // 예전/다른 모양(doneIds 배열)도 함께 살린다
+      var ids = [];
+      [ld.doneIds, rd.doneIds].forEach(function (arr) {
+        (Array.isArray(arr) ? arr : []).forEach(function (id) {
+          if (id !== undefined && id !== null && ids.indexOf(String(id)) === -1) ids.push(String(id));
+        });
+      });
+      ids.forEach(function (id) { done[id] = true; });
+      var rec = { done: done };
+      var at = String(ld.updatedAt || "") > String(rd.updatedAt || "") ? ld.updatedAt : rd.updatedAt;
+      if (at) rec.updatedAt = at;
+      out[k] = rec;
+    });
+    return out;
+  }
+
+  function mergeMorningPrep(base, local, remote, ctx) {
+    var l = isPlainObject(local) ? local : null;
+    var r = isPlainObject(remote) ? remote : null;
+    if (!l) {
+      if (r && !deepEqual(r, base)) ctx.remoteTouched = true;
+      return r ? cloneValue(r) : undefined;
+    }
+    if (!r) return cloneValue(l);
+    var b = isPlainObject(base) ? base : null;
+    var out = mergeObject("morningPrep", b, l, r, ctx);
+    out.steps = mergeList("morningPrep.steps", b && b.steps, l.steps || [], r.steps || [], ctx);
+    out.days = mergePrepDays(b, l, r, ctx);
+    return out;
+  }
+
   // 가족 미션: 오늘 것만 뜻이 있으니 날짜가 새 쪽을 기준으로, 같은 날이면 완료·개수를 합친다
   function mergeMission(base, local, remote, ctx) {
     var l = isPlainObject(local) ? local : null;
@@ -585,6 +637,7 @@
       });
     }
     if (payload.routine) payload.routine.items = purge(payload.routine.items, d.routineItems);
+    if (payload.morningPrep) payload.morningPrep.steps = purge(payload.morningPrep.steps, d.prepSteps);
     if (payload.growth) payload.growth.records = purge(payload.growth.records, d.growth);
     if (payload.quickPhrases) payload.quickPhrases.custom = purge(payload.quickPhrases.custom, d.quickCustom);
     if (payload.study) payload.study.items = purge(payload.study.items, d.study);

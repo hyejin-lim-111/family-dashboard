@@ -106,7 +106,7 @@ function allChecked() {
     const t = boot(payload());
     await sleep(650);
     check("부팅 오류 없음", t.errors.length === 0, t.errors.join(" / "));
-    check("하단 탭 7개 · 세 번째가 키우기", t.$$(".tab-btn").map((b) => b.getAttribute("data-tab")).join(",") === "home,study,pet,mission,together,growth,chat",
+    check("하단 탭 8개 · 키우기 탭 유지", t.$$(".tab-btn").map((b) => b.getAttribute("data-tab")).join(",") === "home,prep,study,pet,mission,together,growth,chat",
       t.$$(".tab-btn").map((b) => b.getAttribute("data-tab")).join(","));
     check("탭 이름 = 키우기", t.$('.tab-btn[data-tab="pet"]').textContent.includes("키우기"));
     check("도감 탭은 없어짐", !t.$('.tab-btn[data-tab="dex"]') && !t.$("#view-dex"));
