@@ -2930,8 +2930,9 @@ body.alarm-on { overflow: hidden; }
 .prep-done-banner .grow { flex: 1 1 auto; min-width: 0; }
 .pdb-hi5 { flex: 0 0 auto; white-space: nowrap; }
 
-/* 360px 폰: 헤더가 넘치지 않게 화면 켜짐 버튼은 설정 안에서만 (태블릿·큰 폰은 그대로) */
-@media (max-width: 379px) {
+/* 폰 폭(450px 미만)에서는 제목이 두 줄로 접히지 않게 화면 켜짐 버튼은 설정 안에서만
+   (태블릿·넓은 화면에서는 헤더에 그대로 보여요) */
+@media (max-width: 449px) {
   .topbar .wake-btn { display: none; }
 }
 
