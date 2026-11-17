@@ -57,13 +57,11 @@ if (manifest) {
 
   // 선언한 크기와 실제 파일 크기가 같아야 한다
   icons.forEach((icon) => {
-    const file = "family-dashboard/assets/" + path.basename(icon.src);
     if (!exists("assets/" + path.basename(icon.src))) { check(icon.src + " 파일 존재", false); return; }
     const size = pngSize("assets/" + path.basename(icon.src));
     check(icon.src + " 실제 크기 " + icon.sizes,
       !!size && icon.sizes.toLowerCase() === size.width + "x" + size.height,
       size ? size.width + "x" + size.height : "PNG 아님");
-    void file;
   });
 }
 
