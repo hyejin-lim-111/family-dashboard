@@ -241,16 +241,16 @@
   var PREP_START_DEFAULT = "07:10";      // 준비 시작
   var PREP_DEPART_DEFAULT = "08:00";     // 유치원 출발
   var PREP_STEPS_DEFAULT = [
-    { id: "p-wash",  name: "세수·양치",   img: "assets/prep_wash.png?v=20261117" },
-    { id: "p-dress", name: "옷 입기",     img: "assets/prep_dress.png?v=20261117" },
-    { id: "p-meal",  name: "아침 먹기",   img: "assets/prep_breakfast.png?v=20261117" },
-    { id: "p-bag",   name: "가방 챙기기", img: "assets/prep_bag.png?v=20261117" }
+    { id: "p-wash",  name: "세수·양치",   img: "assets/prep_wash.png?v=20261117b" },
+    { id: "p-dress", name: "옷 입기",     img: "assets/prep_dress.png?v=20261117b" },
+    { id: "p-meal",  name: "아침 먹기",   img: "assets/prep_breakfast.png?v=20261117b" },
+    { id: "p-bag",   name: "가방 챙기기", img: "assets/prep_bag.png?v=20261117b" }
   ];
   var PREP_STEP_IMG = {
-    "p-wash": "assets/prep_wash.png?v=20261117",
-    "p-dress": "assets/prep_dress.png?v=20261117",
-    "p-meal": "assets/prep_breakfast.png?v=20261117",
-    "p-bag": "assets/prep_bag.png?v=20261117"
+    "p-wash": "assets/prep_wash.png?v=20261117b",
+    "p-dress": "assets/prep_dress.png?v=20261117b",
+    "p-meal": "assets/prep_breakfast.png?v=20261117b",
+    "p-bag": "assets/prep_bag.png?v=20261117b"
   };
 
   /* ---------- 🐣 내 캐릭터 키우기 (레벨업 · 돌보기) ---------- */
