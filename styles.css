@@ -189,6 +189,16 @@ h1, h2, h3, .title-font { font-family: var(--font-title); font-weight: 700; lett
 .icon-btn:active { transform: scale(0.93); }
 .icon-btn.is-on { background: var(--yellow-soft); border-color: #F0D28C; }
 
+/* 화면 켜짐 유지 토글 (태블릿에서 한눈에) */
+.wake-btn {
+  width: auto; min-width: 38px; padding: 0 9px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  border-radius: 999px;
+}
+.wake-btn .wk-ico { font-size: 15px; line-height: 1; }
+.wake-btn .wk-txt { display: none; font-size: 11.5px; color: var(--ink-faint); letter-spacing: -0.1px; }
+.wake-btn.is-on .wk-txt { color: #8A6112; font-weight: 700; }
+
 .views { flex: 1 1 auto; position: relative; }
 
 .view { display: none; padding-top: 4px; animation: fadeUp 0.32s ease both; }
@@ -2014,9 +2024,10 @@ body.alarm-on { overflow: hidden; }
 .tab-btn .tab-ico { font-size: 19px; }
 
 @media (min-width: 720px) {
-  .born-banner { padding: 14px 18px; margin-bottom: 14px; }
-  .bb-main b { font-size: 17px; }
+  .born-banner { padding: 14px 18px; margin-bottom: 14px; }  .bb-main b { font-size: 17px; }
   .bb-sub { font-size: 12.5px; }
+
+  .wake-btn .wk-txt { display: inline; }
 
   .quick-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); max-height: 260px; gap: 8px; }
   .quick-btn { min-height: 68px; }
@@ -2916,6 +2927,86 @@ body.alarm-on { overflow: hidden; }
 .prep-done-banner b { display: block; font-family: var(--font-title); font-size: 15px; color: #8A5A28; }
 .prep-done-banner span { font-size: 11.5px; color: #9C7248; }
 @keyframes prepPop { from { transform: scale(0.96); opacity: 0; } to { transform: none; opacity: 1; } }
+.prep-done-banner .grow { flex: 1 1 auto; min-width: 0; }
+.pdb-hi5 { flex: 0 0 auto; white-space: nowrap; }
+
+/* ---------------- 🖐️ 등원준비 하이파이브 ---------------- */
+
+.hi5-overlay {
+  position: fixed; inset: 0; z-index: 88;
+  display: flex; align-items: center; justify-content: center;
+  padding: 18px;
+  background: radial-gradient(72% 56% at 50% 34%, rgba(255, 248, 214, 0.97) 0%, rgba(255, 232, 240, 0.97) 46%, rgba(244, 232, 255, 0.98) 100%);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  animation: hi5Fade 0.25s ease both;
+}
+.hi5-overlay[hidden] { display: none; }
+.hi5-overlay.is-cheer { background: radial-gradient(70% 55% at 50% 40%, #FFF6D4 0%, #FFE3EC 45%, #F3E6FF 100%); }
+@keyframes hi5Fade { from { opacity: 0; } to { opacity: 1; } }
+
+.hi5-stage { position: relative; width: 100%; max-width: 460px; text-align: center; }
+.hi5-kicker {
+  display: inline-block; margin-bottom: 4px;
+  background: #fff; border: 2px solid #FFD48A; border-radius: 999px;
+  padding: 4px 14px; font-size: 12.5px; color: #8A5A28; font-weight: 700;
+}
+.hi5-kicker b { color: #C2406A; }
+
+.hi5-hand {
+  display: block; margin: 0 auto;
+  width: min(58vw, 240px); height: min(58vw, 240px);
+  border: 0; background: none; padding: 0;
+  cursor: pointer; touch-action: manipulation;
+  animation: hi5Pulse 1.5s ease-in-out infinite;
+  filter: drop-shadow(0 18px 26px rgba(240, 162, 188, 0.38));
+}
+.hi5-svg { display: block; width: 100%; height: 100%; }
+.hi5-hand:active { animation: none; transform: scale(0.94); }
+@keyframes hi5Pulse {
+  0%, 100% { transform: scale(1) rotate(-2deg); }
+  50% { transform: scale(1.06) rotate(2deg); }
+}
+.hi5-title {
+  font-family: var(--font-title); font-size: clamp(23px, 6vw, 34px);
+  color: #7A4E2E; margin-top: 4px; letter-spacing: -0.5px;
+}
+.hi5-sub { font-size: 13.5px; color: #9C7248; margin-top: 2px; }
+.hi5-skip { margin-top: 14px; }
+
+.hi5-cheer { position: relative; }
+.hi5-cheer[hidden] { display: none; }
+.hi5-cheer-emoji { font-size: 46px; line-height: 1; animation: hi5Pop 0.5s cubic-bezier(0.2, 1.4, 0.4, 1) both; }
+.hi5-cheer-msg {
+  margin-top: 8px;
+  font-family: var(--font-title);
+  font-size: clamp(26px, 7.2vw, 40px);
+  line-height: 1.26;
+  color: #C2406A;
+  text-shadow: 0 3px 0 #fff, 0 12px 24px rgba(255, 160, 190, 0.35);
+  animation: hi5Pop 0.5s 0.06s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+.hi5-cheer-sub { margin-top: 10px; font-size: 13px; color: #9C7248; }
+.hi5-done { margin-top: 16px; min-width: 148px; }
+@keyframes hi5Pop { from { transform: scale(0.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+.hi5-sparks span {
+  position: absolute; font-size: 24px; opacity: 0;
+  animation: hi5Spark 1.8s ease-in-out infinite;
+  pointer-events: none;
+}
+.hi5-sparks span:nth-child(1) { left: 3%; top: 16%; animation-delay: 0s; }
+.hi5-sparks span:nth-child(2) { right: 5%; top: 8%; animation-delay: 0.32s; }
+.hi5-sparks span:nth-child(3) { left: 10%; bottom: 6%; animation-delay: 0.64s; }
+.hi5-sparks span:nth-child(4) { right: 8%; bottom: 12%; animation-delay: 0.96s; }
+.hi5-sparks span:nth-child(5) { left: 46%; top: -4%; animation-delay: 1.28s; }
+@keyframes hi5Spark {
+  0%, 100% { opacity: 0; transform: scale(0.6) translateY(4px); }
+  45% { opacity: 1; transform: scale(1.1) translateY(-6px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hi5-hand, .hi5-cheer-emoji, .hi5-cheer-msg, .hi5-sparks span { animation: none; }
+}
 
 @media (max-width: 480px) {
   .prep-top { grid-template-columns: minmax(0, 1fr); gap: 9px; }

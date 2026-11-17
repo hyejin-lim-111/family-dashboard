@@ -7,7 +7,7 @@
      손대지 않고 그대로 네트워크로 보냅니다. (캐시·가로채기 없음)
    ========================================================= */
 
-var VERSION = "20261117-1";
+var VERSION = "20261118-1";
 var CACHE_NAME = "family-dashboard-" + VERSION;
 var SCOPE = self.registration ? self.registration.scope : "/family-dashboard/";
 

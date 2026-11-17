@@ -3071,6 +3071,7 @@
         if (id !== undefined && id !== null) done[String(id)] = true;
       });
       var next = { done: done };
+      if (rec.hi5) next.hi5 = true;          // 오늘 하이파이브까지 끝냈는지 (날짜별)
       if (typeof rec.updatedAt === "string") next.updatedAt = rec.updatedAt;
       out[k] = next;
     });
@@ -3368,7 +3369,9 @@
 
       '<div class="prep-done-banner" id="prepDone" hidden>' +
         '<span class="pdb-emoji" aria-hidden="true">🎉</span>' +
-        '<div><b>오늘 등원 준비 완료!</b><span>다인이 혼자서 척척 — 유치원 잘 다녀와 💗</span></div>' +
+        '<div class="grow"><b>오늘 등원 준비 완료!</b><span>다인이 혼자서 척척 — 유치원 잘 다녀와 💗' +
+          (hi5Done() ? ' · 🖐️ 하이파이브 완료' : '') + '</span></div>' +
+        '<button class="btn btn-xs btn-soft pdb-hi5" type="button" data-action="prep-highfive" aria-label="다시 하이파이브 보기">🖐️ 다시 하이파이브</button>' +
       '</div>' +
 
       '<div class="section-head">' +
@@ -3389,6 +3392,12 @@
     qsa("#prepCards .prep-card").forEach(function (b) {
       b.style.animationDelay = "0ms";
     });
+
+    // 4단계를 모두 끝냈으면 하이파이브 — 오늘 한 번만 저절로 떠요
+    if (allDone && !hi5Done() && !hi5.open && CURRENT_TAB === "prep" &&
+        qs("#deviceGate").hidden && qs("#modalRoot").hidden && qs("#alarmOverlay").hidden) {
+      openHighFive();
+    }
   }
 
   function openPrepTime() {
@@ -3448,11 +3457,109 @@
     });
   }
 
+  /* =========================================================
+     🖐️ 등원준비 완료 하이파이브
+     · 4단계를 모두 끝내면 화면 가운데 큰 손바닥이 나와요.
+     · 손바닥을 누르면 "다인아! 유치원 잘 갔다와♡" 와 함께 오늘의 하이파이브 완료(hi5).
+     · 오늘 이미 했으면 저절로 다시 덮지 않고, 완료 배너의 '다시 하이파이브' 로만 보여요.
+     ========================================================= */
+  var hi5 = { open: false, stage: "ask", timer: null };
+
+  function hi5Done(dateKey) { return !!prepDay(dateKey || todayKey()).hi5; }
+
+  function hi5MarkDone() {
+    var rec = prepDay(todayKey());
+    if (rec.hi5) return;
+    rec.hi5 = true;
+    rec.updatedAt = new Date().toISOString();
+    persist(true);
+  }
+
+  function paintHighFive() {
+    var ov = qs("#hi5Overlay");
+    if (!ov) return;
+    var cheer = hi5.stage === "cheer";
+    ov.classList.toggle("is-cheer", cheer);
+    var ask = qs("#hi5Ask");
+    if (ask) ask.hidden = cheer;
+    var msg = qs("#hi5Cheer");
+    if (msg) msg.hidden = !cheer;
+    if (cheer) {
+      var btn = qs("#hi5DoneBtn");
+      if (btn) btn.focus();
+    }
+  }
+
+  function hi5CheerSound() {
+    try {
+      if (navigator && typeof navigator.vibrate === "function") navigator.vibrate([18, 40, 26]);
+    } catch (e) { /* 진동은 되는 기기에서만 */ }
+    var ctx = ensureAudio();
+    if (!ctx) return;
+    try {
+      var base = ctx.currentTime;
+      [523.25, 659.25, 783.99, 1046.5].forEach(function (f, i) {
+        var o = ctx.createOscillator();
+        var g = ctx.createGain();
+        o.type = "triangle";
+        o.frequency.value = f;
+        o.connect(g); g.connect(ctx.destination);
+        var t0 = base + i * 0.11;
+        g.gain.setValueAtTime(0.0001, t0);
+        g.gain.exponentialRampToValueAtTime(0.16, t0 + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.40);
+        o.start(t0); o.stop(t0 + 0.44);
+      });
+    } catch (e) { /* 소리는 선택 */ }
+  }
+
+  function openHighFive(opts) {
+    opts = opts || {};
+    var ov = qs("#hi5Overlay");
+    if (!ov) return;
+    if (!prepAllDone()) return;                       // 4/4 일 때만
+    if (!opts.force && hi5Done()) return;             // 오늘 이미 했으면 저절로는 안 띄움
+    if (hi5.open) return;
+    hi5.open = true;
+    hi5.stage = "ask";
+    clearTimeout(hi5.timer);
+    paintHighFive();
+    ov.hidden = false;
+    var hand = qs("#hi5Hand");
+    if (hand) hand.focus();
+  }
+
+  function closeHighFive() {
+    var ov = qs("#hi5Overlay");
+    if (!ov || !hi5.open) return;
+    hi5.open = false;
+    hi5.stage = "ask";
+    clearTimeout(hi5.timer);
+    ov.hidden = true;
+    ov.classList.remove("is-cheer");
+    // 닫기만 해도 "오늘은 봤어요" 로 남겨서 화면을 계속 덮지 않아요
+    if (prepAllDone()) hi5MarkDone();
+    renderPrep();
+  }
+
+  function hi5Touch() {
+    if (!hi5.open || hi5.stage === "cheer") return;
+    hi5.stage = "cheer";
+    hi5MarkDone();
+    paintHighFive();
+    hi5CheerSound();
+    clearTimeout(hi5.timer);
+    hi5.timer = setTimeout(function () {
+      if (hi5.open && hi5.stage === "cheer") closeHighFive();
+    }, 4200);
+  }
+
   function resetPrepToday() {
     var n = prepDoneCount();
     confirmModal("오늘 등원 준비 초기화", n ? "오늘 완료한 " + n + "단계를 모두 풀고 처음부터 다시 시작해요. 지난 날 기록은 그대로 남아요." : "오늘 완료한 단계가 없어요. 그래도 처음부터 다시 시작할까요?", "초기화", function () {
       var rec = prepDay(todayKey());
       rec.done = {};
+      delete rec.hi5;                 // 다시 준비하면서 하이파이브도 새로
       rec.updatedAt = new Date().toISOString();
       persist(true);
       renderPrep();
@@ -4765,6 +4872,176 @@
   }
 
   /* =========================================================
+     화면 켜짐 유지 (Screen Wake Lock)
+     · 태블릿에서 기록장을 열어 두면, 끄기 전까지 화면이 저절로 꺼지지 않게 해요.
+     · 이 설정은 그 기기에만 적용돼요 (localStorage). 가족 저장소(Supabase)로 보내지 않아요.
+       → 폰에서 켜고 꺼도 다른 기기 설정을 덮지 않아요.
+     ========================================================= */
+  var WAKE_KEY = "family-dashboard.wakelock.v1";
+  var WAKE_FAIL_MSG = "화면 켜짐 유지를 켜지 못했어요. 태블릿 설정에서 화면 자동 꺼짐 시간을 늘려 주세요.";
+  var wake = { on: false, supported: false, active: false, failed: false, lock: null, pending: null, bound: false };
+
+  function wakeSupported() {
+    try { return !!(navigator && navigator.wakeLock && typeof navigator.wakeLock.request === "function"); }
+    catch (e) { return false; }
+  }
+
+  function readWakePref() {
+    try { return localStorage.getItem(WAKE_KEY) === "1"; } catch (e) { return false; }
+  }
+
+  function writeWakePref(on) {
+    try { localStorage.setItem(WAKE_KEY, on ? "1" : "0"); } catch (e) { /* 저장 못 해도 동작은 계속 */ }
+  }
+
+  function wakeVisible() { return document.visibilityState !== "hidden"; }
+
+  function wakeSubText() {
+    if (!wake.supported) {
+      return "이 기기·브라우저에서는 자동 켜짐 유지를 지원하지 않아요. 태블릿 설정에서 ‘화면 자동 꺼짐 시간’을 늘려 주세요.";
+    }
+    if (wake.on && wake.active) {
+      return "끄기 전까지 화면이 꺼지지 않아요. 앱을 다시 열거나 다른 앱에서 돌아와도 자동으로 다시 켜져요.";
+    }
+    if (wake.on) {
+      return "켜 두었지만 지금은 유지하지 못했어요. 화면을 한 번 눌러 앱을 앞으로 가져오면 다시 시도해요.";
+    }
+    return "켜 두면 아무것도 누르지 않아도 화면이 꺼지지 않아요. 이 기기에만 적용돼요.";
+  }
+
+  function paintWake() {
+    var btn = qs("#wakeBtn");
+    if (btn) {
+      btn.classList.toggle("is-on", wake.on);
+      btn.setAttribute("aria-pressed", wake.on ? "true" : "false");
+      var ico = btn.querySelector(".wk-ico");
+      var txt = btn.querySelector(".wk-txt");
+      if (ico) ico.textContent = wake.on ? "☀️" : "🌙";
+      if (txt) txt.textContent = wake.on ? "화면 켜짐" : "자동 꺼짐";
+      var label;
+      if (!wake.supported) {
+        label = "이 기기에서는 화면 켜짐 유지를 지원하지 않아요";
+      } else if (!wake.on) {
+        label = "화면 켜짐 유지 꺼짐 — 눌러서 켜기";
+      } else if (wake.active) {
+        label = "화면 켜짐 유지 켜짐 — 눌러서 끄기";
+      } else {
+        label = "화면 켜짐 유지 (다시 켜는 중) — 눌러서 끄기";
+      }
+      btn.title = label;
+      btn.setAttribute("aria-label", label);
+    }
+
+    var title = qs("#wakeSetTitle");
+    if (title) title.textContent = "화면 켜짐 유지 " + (wake.on ? "켜짐" : "꺼짐");
+    var sub = qs("#wakeSetSub");
+    if (sub) sub.textContent = wakeSubText();
+    var sbtn = qs("#wakeSetBtn");
+    if (sbtn) {
+      sbtn.textContent = wake.on ? "끄기" : "켜기";
+      sbtn.className = "btn btn-xs " + (wake.on ? "btn-ghost" : "btn-soft");
+      sbtn.disabled = !wake.supported;
+      sbtn.title = wake.supported ? "" : "이 기기에서는 지원하지 않아요";
+    }
+  }
+
+  /* OS·배터리 절전 등으로 잠금이 풀렸을 때: 사용자가 끈 게 아니면 다시 잡아요 */
+  function wakeOnRelease() {
+    wake.lock = null;
+    wake.active = false;
+    paintWake();
+    if (!wake.on || !wakeVisible()) return;
+    setTimeout(function () {
+      if (wake.on && wakeVisible() && !wake.lock && !wake.pending) wakeRequest({ quiet: true });
+    }, 300);
+  }
+
+  function wakeRequest(opts) {
+    opts = opts || {};
+    if (!wake.supported) return Promise.resolve(false);
+    if (wake.lock) { paintWake(); return Promise.resolve(true); }
+    if (wake.pending) return wake.pending;
+
+    var asked;
+    try {
+      asked = navigator.wakeLock.request("screen");
+    } catch (e) {
+      wake.failed = true;
+      wake.active = false;
+      paintWake();
+      if (!opts.quiet) toast(WAKE_FAIL_MSG, "🌙");
+      return Promise.resolve(false);
+    }
+
+    wake.pending = Promise.resolve(asked).then(function (lock) {
+      wake.pending = null;
+      wake.lock = lock || null;
+      wake.active = true;
+      wake.failed = false;
+      try {
+        if (lock && lock.addEventListener) lock.addEventListener("release", wakeOnRelease);
+      } catch (e) { /* release 감시를 못 붙여도 켜진 건 그대로 */ }
+      paintWake();
+      return true;
+    }).catch(function () {
+      wake.pending = null;
+      wake.lock = null;
+      wake.active = false;
+      wake.failed = true;
+      paintWake();
+      if (!opts.quiet) toast(WAKE_FAIL_MSG, "🌙");
+      return false;
+    });
+    return wake.pending;
+  }
+
+  function wakeSet(on, opts) {
+    opts = opts || {};
+    var want = !!on;
+
+    if (want && !wake.supported) {
+      // 지원하지 않는 기기에서는 켠 척하지 않고, 솔직히 안내해요
+      wake.on = false;
+      writeWakePref(false);
+      paintWake();
+      if (!opts.quiet) toast("이 기기에서는 화면 켜짐 유지를 지원하지 않아요. 태블릿 설정에서 화면 자동 꺼짐 시간을 늘려 주세요.", "🙏");
+      return;
+    }
+
+    wake.on = want;
+    writeWakePref(want);
+
+    if (!want) {
+      var lock = wake.lock;
+      wake.lock = null;
+      wake.active = false;
+      paintWake();
+      if (lock && lock.release) { try { lock.release(); } catch (e) { /* 무시 */ } }
+      if (!opts.quiet) toast("화면이 원래대로 저절로 꺼져요", "🌙");
+      return;
+    }
+
+    wakeRequest(opts).then(function (ok) {
+      if (ok && !opts.quiet) toast("이제 끄기 전까지 화면이 켜져 있어요", "☀️");
+    });
+  }
+
+  /* 앱이 다시 앞으로 나오면(visibility) 잠금을 다시 잡아요 */
+  function initWakeLock() {
+    wake.supported = wakeSupported();
+    // 지원하지 않는 기기에서는 켜진 것처럼 보이지 않게 꺼 두어요 (저장값은 그대로)
+    wake.on = wake.supported ? readWakePref() : false;
+    paintWake();
+    if (wake.on && wake.supported) wakeRequest({ quiet: true });
+    if (!wake.bound) {
+      wake.bound = true;
+      document.addEventListener("visibilitychange", function () {
+        if (wake.on && wake.supported && wakeVisible() && !wake.lock && !wake.pending) wakeRequest({ quiet: true });
+      });
+    }
+  }
+
+  /* =========================================================
      설정
      ========================================================= */
   function renderSettings() {
@@ -4795,6 +5072,13 @@
         '<div class="sr-sub">기록을 파일로 내려받거나, 파일로 되살릴 수 있어요</div></div>' +
         '<span><button class="btn btn-xs btn-ghost" type="button" data-action="export-data">내보내기</button> ' +
         '<button class="btn btn-xs btn-ghost" type="button" data-action="import-data">불러오기</button></span></div>' +
+      '<h4 class="title-font" style="font-size:14px;color:#5A463C;margin-top:10px">화면</h4>' +
+      '<div class="setting-row" id="wakeSettingRow"><div class="sr-main">' +
+        '<div class="sr-title" id="wakeSetTitle">화면 켜짐 유지 ' + (wake.on ? "켜짐" : "꺼짐") + '</div>' +
+        '<div class="sr-sub" id="wakeSetSub">' + esc(wakeSubText()) + '</div></div>' +
+        '<button class="btn btn-xs ' + (wake.on ? "btn-ghost" : "btn-soft") + '" type="button" data-action="toggle-wake" id="wakeSetBtn"' +
+          (wake.supported ? "" : ' disabled title="이 기기에서는 지원하지 않아요"') + '>' +
+          (wake.on ? "끄기" : "켜기") + '</button></div>' +
       '<h4 class="title-font" style="font-size:14px;color:#5A463C;margin-top:10px">채팅 알림</h4>' +
       '<div class="setting-row"><div class="sr-main"><div class="sr-title">새 메시지 알림 ' + (state.settings && state.settings.notify ? "켜짐" : "꺼짐") + '</div>' +
         '<div class="sr-sub">' + (notiSupported
@@ -4972,6 +5256,9 @@
         break;
       }
       case "prep-reset": resetPrepToday(); break;
+      case "prep-highfive": openHighFive({ force: true }); break;
+      case "hi5-touch": hi5Touch(); break;
+      case "hi5-close": closeHighFive(); break;
       case "prep-refresh-weather": fetchWeather(true); toast("등원 날씨를 새로 받아왔어요", "🌦️"); break;
 
       /* study */
@@ -5422,6 +5709,7 @@
 
       /* settings */
       case "open-settings": renderSettings(); break;
+      case "toggle-wake": wakeSet(!wake.on); break;
       case "reset-avatars":
         state.members.forEach(function (m) { m.photo = ""; });
         persist(); renderAll(); renderSettings();
@@ -5449,7 +5737,9 @@
   });
 
   document.addEventListener("keydown", function (e) {
-    if (e.key === "Escape" && !qs("#modalRoot").hidden) closeModal();
+    if (e.key !== "Escape") return;
+    if (hi5.open) { closeHighFive(); return; }
+    if (!qs("#modalRoot").hidden) closeModal();
   });
 
   // 저녁 루틴 추가 입력에서 Enter
@@ -5498,7 +5788,16 @@
       return prepStatus(date, cfg || { startTime: PREP_START_DEFAULT, departureTime: PREP_DEPART_DEFAULT });
     },
     tip: prepGoingOutTip,
-    defaults: { startTime: PREP_START_DEFAULT, departureTime: PREP_DEPART_DEFAULT }
+    defaults: { startTime: PREP_START_DEFAULT, departureTime: PREP_DEPART_DEFAULT },
+    hi5: function () { return { open: hi5.open, stage: hi5.stage, done: hi5Done() }; }
+  };
+  // 화면 켜짐 유지 — 테스트·확인용 (화면에는 영향 없음)
+  window.FamilyWake = {
+    key: WAKE_KEY,
+    isOn: function () { return wake.on; },
+    isActive: function () { return wake.active; },
+    isSupported: function () { return wake.supported; },
+    state: function () { return { on: wake.on, active: wake.active, supported: wake.supported, failed: wake.failed }; }
   };
   /* ---------- 앱처럼 설치(PWA) · 서비스 워커 ----------
      GitHub Pages 서브경로(/family-dashboard/)에서도 동작하도록 상대 경로('./sw.js')로 등록해요.
@@ -5527,6 +5826,8 @@
   }
 
   function boot() {
+    // 화면 켜짐 유지: 이 기기에 저장해 둔 설정을 먼저 되살려요 (실패해도 앱은 그대로)
+    initWakeLock();
     // 저장소는 "덮어쓰기"가 아니라 "병합"으로 저장해요.
     //  · getLocal: 이 기기가 지금 들고 있는 상태를 병합 때 바로 쓸 수 있게
     //  · maxChat/maxPhotos: 병합한 채팅도 화면 상한 유지

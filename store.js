@@ -423,6 +423,12 @@
       });
       ids.forEach(function (id) { done[id] = true; });
       var rec = { done: done };
+      // 오늘 하이파이브 완료(hi5)는 3-way — 한 기기에서 끈(초기화) 것이 다른 기기의 옛 복사본으로 되살아나지 않게
+      var hi5Base = bd && bd.hi5 ? true : undefined;
+      var hi5Local = ld.hi5 ? true : undefined;
+      var hi5Remote = rd.hi5 ? true : undefined;
+      var hi5Merged = hi5Local === hi5Remote ? hi5Local : (hi5Local === hi5Base ? hi5Remote : hi5Local);
+      if (hi5Merged) rec.hi5 = true;
       var at = String(ld.updatedAt || "") > String(rd.updatedAt || "") ? ld.updatedAt : rd.updatedAt;
       if (at) rec.updatedAt = at;
       out[k] = rec;

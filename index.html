@@ -21,7 +21,7 @@
 <!-- 본문 글씨: Pretendard (깨끗한 고딕) + Noto Sans KR 폴백 -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&display=swap">
-<link rel="stylesheet" href="styles.css?v=20261117j">
+<link rel="stylesheet" href="styles.css?v=20261118a">
 </head>
 <body>
 
@@ -57,6 +57,9 @@
       <button class="device-chip" type="button" data-action="open-device" id="deviceChip" aria-label="이 기기 프로필 바꾸기">
         <img id="deviceChipImg" src="assets/avatar_daini.png" alt="">
         <span id="deviceChipName">다인이</span>
+      </button>
+      <button class="icon-btn wake-btn" type="button" data-action="toggle-wake" id="wakeBtn" aria-pressed="false" aria-label="화면 켜짐 유지 꺼짐 — 눌러서 켜기" title="화면 켜짐 유지 꺼짐 — 눌러서 켜기">
+        <span class="wk-ico" aria-hidden="true">🌙</span><span class="wk-txt">자동 꺼짐</span>
       </button>
       <button class="icon-btn" type="button" data-action="toggle-lock" id="lockBtn" aria-label="이 기기 잠금" title="이 기기 잠금">🔓</button>
       <button class="icon-btn" type="button" data-action="open-settings" id="settingsBtn" aria-label="설정" title="설정">⚙️</button>
@@ -191,6 +194,46 @@
   </div>
 </div>
 
+<!-- 🖐️ 등원준비 완료 하이파이브 (4단계 모두 끝냈을 때) -->
+<div class="hi5-overlay" id="hi5Overlay" hidden role="dialog" aria-modal="true" aria-label="등원 준비 완료 하이파이브">
+  <div class="hi5-stage">
+    <div class="hi5-ask" id="hi5Ask">
+      <p class="hi5-kicker">등원 준비 <b>4 / 4</b> 완료!</p>
+      <button class="hi5-hand" type="button" id="hi5Hand" data-action="hi5-touch" aria-label="손바닥을 눌러 하이파이브">
+        <svg class="hi5-svg" viewBox="0 0 220 220" aria-hidden="true" focusable="false">
+          <defs>
+            <linearGradient id="hi5Skin" x1="0.1" y1="0" x2="0.4" y2="1">
+              <stop offset="0" stop-color="#FFEAF1"/>
+              <stop offset="0.55" stop-color="#FFD5E2"/>
+              <stop offset="1" stop-color="#FFC3D6"/>
+            </linearGradient>
+          </defs>
+          <ellipse cx="110" cy="205" rx="58" ry="9" fill="#EBCFBE" opacity="0.4"/>
+          <g stroke="#F0A2BC" stroke-width="5" stroke-linejoin="round" fill="url(#hi5Skin)">
+            <path d="M40 150 q0-44 46-44 h48 q46 0 46 44 v12 q0 34-38 34 h-64 q-38 0-38-34 z"/>
+            <rect x="66" y="52" width="30" height="92" rx="15"/>
+            <rect x="100" y="38" width="31" height="106" rx="15.5"/>
+            <rect x="134" y="52" width="30" height="92" rx="15"/>
+            <ellipse cx="44" cy="148" rx="19" ry="34" transform="rotate(-38 44 148)"/>
+          </g>
+          <path d="M110 172 c-12-9-21-15-21-24 a10 10 0 0 1 21-7 a10 10 0 0 1 21 7 c0 9-9 15-21 24z" fill="#FF87AC"/>
+        </svg>
+      </button>
+      <p class="hi5-title" id="hi5Title">다인아, 하이파이브!</p>
+      <p class="hi5-sub">손바닥을 콕 눌러 봐요 🖐️</p>
+      <button class="btn btn-xs btn-ghost hi5-skip" type="button" data-action="hi5-close">다음에 할래요</button>
+    </div>
+
+    <div class="hi5-cheer" id="hi5Cheer" hidden>
+      <div class="hi5-sparks" aria-hidden="true"><span>✨</span><span>💗</span><span>✨</span><span>⭐</span><span>✨</span></div>
+      <p class="hi5-cheer-emoji" aria-hidden="true">🖐️✨</p>
+      <p class="hi5-cheer-msg" id="hi5CheerMsg">다인아! 유치원 잘 갔다와♡</p>
+      <p class="hi5-cheer-sub">오늘 아침도 척척 잘했어 · 엄마 아빠가 응원해 💗</p>
+      <button class="btn btn-primary hi5-done" type="button" data-action="hi5-close" id="hi5DoneBtn">확인!</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-root" id="modalRoot" hidden>
   <div class="modal" id="modalBox" role="dialog" aria-modal="true" aria-labelledby="modalTitle"></div>
 </div>
@@ -199,9 +242,9 @@
 
 <script src="config.js"></script>
 <script src="growth-data.js"></script>
-<script src="holidays.js?v=20261117j"></script>
-<script src="quizzes.js?v=20261117j"></script>
-<script src="store.js?v=20261117j"></script>
-<script src="app.js?v=20261117j"></script>
+<script src="holidays.js?v=20261118a"></script>
+<script src="quizzes.js?v=20261118a"></script>
+<script src="store.js?v=20261118a"></script>
+<script src="app.js?v=20261118a"></script>
 </body>
 </html>
