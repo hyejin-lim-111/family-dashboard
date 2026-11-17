@@ -2934,6 +2934,12 @@ body.alarm-on { overflow: hidden; }
 }
 
 @media (max-width: 380px) {
+  /* 360px 폰: 상단 이름·날짜가 두 줄로 접히지 않게 */
+  .brand { gap: 6px; }
+  .brand-mark { width: 32px; height: 32px; }
+  .brand-title { font-size: 15px; white-space: nowrap; letter-spacing: -0.4px; }
+  .brand-sub { font-size: 9.5px; white-space: nowrap; }
+  .prep-art-wrap { height: 118px; }
   .tab-btn { font-size: 8.5px; }
   .tab-btn .tab-ico { font-size: 16.5px; }
   .prep-name { font-size: 12px; }
