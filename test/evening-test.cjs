@@ -105,7 +105,12 @@ function legacyPayload() {
       t.$(".routine-hint").textContent.includes("항목당 +100원") && t.$(".routine-hint").textContent.includes("보너스 +500원"),
       t.$(".routine-hint").textContent);
 
-    const st = t.saved();
+    let st = t.saved();
+    // 첫 저장은 350ms 디바운스 뒤에 일어나요 — 기계가 느릴 때를 대비해 최대 2초까지 기다린다
+    for (let i = 0; i < 20 && !(st.routine && st.routine.items.length === 4); i++) {
+      await sleep(100);
+      st = t.saved();
+    }
     check("기존 도장 기록 보존(3개)", Object.values(st.stamps).reduce((a, b) => a + b, 0) === 3);
     check("기존 채팅·할 일·체크리스트 보존",
       st.chat.length === 1 && st.todos.dain.length === 1 && st.checklists.lists[0].items.length === 1);

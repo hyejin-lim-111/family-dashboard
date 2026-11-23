@@ -3051,3 +3051,32 @@ body.alarm-on { overflow: hidden; }
   .tl-short { display: none; }
   .tl-long { display: inline; }
 }
+
+/* =========================================================
+   목록 행 전체 누르기 — 작은 동그라미를 정확히 겨냥하지 않아도
+   체크/해제되게 (다인이 저녁 루틴 · 각자 할 일 · 함께 체크리스트 · 공부)
+   ========================================================= */
+.row-tap {
+  cursor: pointer;
+  touch-action: manipulation;                 /* 빠르게 두 번 눌러도 화면이 확대되지 않게 */
+  -webkit-tap-highlight-color: rgba(245, 143, 178, 0.18);
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.12s ease;
+}
+.row-tap:active { transform: scale(0.99); }
+.row-tap:focus-visible { outline: 2px solid #A98BE8; outline-offset: 2px; }
+@media (hover: hover) {
+  .row-tap:hover { background: #FFF6EE; }
+  .row-tap.done:hover { background: #EFFAF2; }
+}
+/* 손가락으로 누르기 좋은 높이 · 동그라미도 조금 크게 */
+.routine-item { min-height: 54px; }
+.routine-item .check-btn { width: 32px; height: 32px; font-size: 15px; }
+.todo-item { min-height: 46px; }
+.todo-item .check-btn { width: 30px; height: 30px; font-size: 13px; }
+.cl-item { min-height: 48px; }
+.cl-item .check-btn { width: 30px; height: 30px; font-size: 13px; }
+.study-item { min-height: 56px; }
+@media (prefers-reduced-motion: reduce) {
+  .row-tap { transition: none; }
+  .row-tap:active { transform: none; }
+}

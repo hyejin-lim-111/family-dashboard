@@ -2146,7 +2146,8 @@
         '<button class="btn btn-sm btn-primary" type="button" data-action="add-study">+ 공부 추가</button></div>' +
       '<div class="study-list" id="studyList" style="margin-top:12px">' +
         (items.length ? items.map(function (it) {
-          return '<div class="study-item' + (it.done ? " done" : "") + '">' +
+          return '<div class="study-item row-tap' + (it.done ? " done" : "") + '"' +
+            ' data-action="toggle-study" data-id="' + esc(it.id) + '">' +
             '<button class="check-btn" type="button" data-action="toggle-study" data-id="' + esc(it.id) + '" aria-label="완료 체크">✓</button>' +
             '<div class="study-body"><div class="study-name">' + esc(it.name) + '</div>' +
               '<div class="study-meta">' +
@@ -2797,7 +2798,9 @@
       '<div class="routine-list" id="routineList">' +
         (items.length ? items.map(function (it) {
           var on = !!routineDay(todayKey()).checked[it.id];
-          return '<div class="routine-item' + (on ? " done" : "") + '" data-routine="' + esc(it.id) + '">' +
+          // 행 전체가 눌러지는 버튼이에요 — 다인이처럼 동그라미를 정확히 겨냥하기 어려운 손으로도 체크되게
+          return '<div class="routine-item row-tap' + (on ? " done" : "") + '" data-routine="' + esc(it.id) + '"' +
+            ' data-action="toggle-routine" data-id="' + esc(it.id) + '">' +
             '<button class="check-btn" type="button" data-action="toggle-routine" data-id="' + esc(it.id) + '"' +
               ' aria-label="' + esc(it.name) + ' 완료 체크" aria-pressed="' + (on ? "true" : "false") + '">✓</button>' +
             '<span class="txt">' + esc(it.name) + '</span>' +
@@ -2976,8 +2979,9 @@
         '</div>' +
         '<div class="todo-list">' +
           (list.length ? list.map(function (t) {
-            return '<div class="todo-item' + (t.done ? " done" : "") + '">' +
-              '<button class="check-btn" style="width:24px;height:24px;font-size:12px" type="button" data-action="toggle-todo" data-who="' + pid + '" data-id="' + esc(t.id) + '">✓</button>' +
+            return '<div class="todo-item row-tap' + (t.done ? " done" : "") + '"' +
+              ' data-action="toggle-todo" data-who="' + pid + '" data-id="' + esc(t.id) + '">' +
+              '<button class="check-btn" type="button" data-action="toggle-todo" data-who="' + pid + '" data-id="' + esc(t.id) + '">✓</button>' +
               '<span class="txt">' + esc(t.text) + '</span>' +
               '<button class="mini-icon" type="button" data-action="delete-todo" data-who="' + pid + '" data-id="' + esc(t.id) + '" aria-label="삭제">🗑️</button>' +
             '</div>';
@@ -3817,7 +3821,8 @@
       '<div class="progress" style="margin-top:9px"><i style="width:' + pct + '%"></i></div>' +
       '<div class="cl-items">' +
         (items.length ? items.map(function (it) {
-          return '<div class="cl-item' + (it.done ? " done" : "") + '">' +
+          return '<div class="cl-item row-tap' + (it.done ? " done" : "") + '"' +
+            ' data-action="toggle-cl-item" data-list="' + esc(list.id) + '" data-id="' + esc(it.id) + '">' +
             '<button class="check-btn" type="button" data-action="toggle-cl-item" data-list="' + esc(list.id) + '" data-id="' + esc(it.id) + '" aria-label="체크">✓</button>' +
             '<span class="txt">' + esc(it.text) + '</span>' +
             '<button class="mini-icon" type="button" data-action="delete-cl-item" data-list="' + esc(list.id) + '" data-id="' + esc(it.id) + '" aria-label="삭제">🗑️</button>' +
@@ -5205,6 +5210,11 @@
     var btn = e.target.closest("[data-action]");
     if (!btn) return;
     var act = btn.getAttribute("data-action");
+    // 목록 행 전체가 눌러지는 카드(.row-tap) 안의 다른 버튼·입력은 그 요소의 동작만 한다 — 체크와 겹치지 않게
+    if (btn.classList.contains("row-tap")) {
+      var innerControl = e.target.closest("button, a, input, select, textarea, label");
+      if (innerControl && innerControl !== btn) return;
+    }
     var id = btn.getAttribute("data-id");
     var who = btn.getAttribute("data-who");
     var listId = btn.getAttribute("data-list");
