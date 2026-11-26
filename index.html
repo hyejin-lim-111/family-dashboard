@@ -21,9 +21,28 @@
 <!-- 본문 글씨: Pretendard (깨끗한 고딕) + Noto Sans KR 폴백 -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&display=swap">
-<link rel="stylesheet" href="styles.css?v=20261123a">
+<link rel="stylesheet" href="styles.css?v=20261126a">
 </head>
-<body>
+<body class="lock-on">
+
+<!-- 입장 비밀번호 잠금 화면 (인증 전에는 대시보드 본문을 감춥니다) -->
+<div class="lock-screen" id="lockScreen" role="dialog" aria-modal="true" aria-labelledby="lockTitle" aria-describedby="lockNote">
+  <div class="lock-card" id="lockCard">
+    <p class="lock-kicker">우리 가족 기록장</p>
+    <div class="lock-emoji" aria-hidden="true">🔒</div>
+    <h1 class="lock-title" id="lockTitle">입장 비밀번호</h1>
+    <p class="lock-sub">우리 가족만 들어올 수 있어요</p>
+    <form class="lock-form" id="lockForm" autocomplete="off">
+      <label class="lock-label" for="lockInput">비밀번호</label>
+      <input class="lock-input" id="lockInput" type="password" autocomplete="current-password"
+        placeholder="비밀번호를 넣어 주세요" aria-label="입장 비밀번호" maxlength="32">
+      <button class="btn btn-primary btn-block lock-submit" id="lockSubmit" type="submit" disabled>들어가기</button>
+    </form>
+    <p class="lock-error" id="lockError" hidden role="alert"></p>
+    <p class="lock-note" id="lockNote">잠금 화면을 준비하고 있어요…</p>
+    <p class="lock-foot">한 번 들어온 기기는 다음부터 비밀번호를 묻지 않아요</p>
+  </div>
+</div>
 
 <!-- 새 채팅 알림 배너 (다른 가족이 보낸 메시지·사진) -->
 <button class="chat-banner" id="chatBanner" type="button" data-action="open-chat" hidden aria-live="polite">
@@ -243,9 +262,10 @@
 
 <script src="config.js"></script>
 <script src="growth-data.js"></script>
-<script src="holidays.js?v=20261123a"></script>
-<script src="quizzes.js?v=20261123a"></script>
-<script src="store.js?v=20261123a"></script>
-<script src="app.js?v=20261123a"></script>
+<script src="holidays.js?v=20261126a"></script>
+<script src="quizzes.js?v=20261126a"></script>
+<script src="store.js?v=20261126a"></script>
+<script src="lock.js?v=20261126a"></script>
+<script src="app.js?v=20261126a"></script>
 </body>
 </html>

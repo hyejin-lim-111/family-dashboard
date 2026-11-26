@@ -161,6 +161,7 @@
       case "morningPrep": return mergeMorningPrep(base, local, remote, ctx);
       case "chat": return mergeChat(base, local, remote, ctx);
       case "deleted": return mergeTombstones(base, local, remote);
+      case "security": return mergeSecurity(base, local, remote, ctx);
       case "quickPhrases.hidden": return mergeTagList(base, local, remote, ctx);
       default: return mergeValue(path, base, local, remote, ctx);
     }
@@ -580,6 +581,40 @@
       },
       ledger: isPlainObject(ledger) ? ledger : {}
     };
+  }
+
+  /* ---------- 🔒 입장 비밀번호 ----------
+     · 한쪽에만 비밀번호 해시가 있으면 그것을 살린다(비밀번호를 설정하지 않은 옛 기기가 덮어쓰지 않게)
+     · 양쪽 해시가 다르면 바꾼 시각(updatedAt)이 늦은 쪽 → 늦은 시각이 없으면 이 기기 것
+     · 같은 해시면 하나로 모은다 */
+  function mergeSecurity(base, local, remote, ctx) {
+    var l = isPlainObject(local) ? local : null;
+    var r = isPlainObject(remote) ? remote : null;
+    if (!l) {
+      if (r) ctx.remoteTouched = true;
+      return r ? cloneValue(r) : undefined;
+    }
+    if (!r) return cloneValue(l);
+    var lh = typeof l.lockHash === "string" ? l.lockHash : "";
+    var rh = typeof r.lockHash === "string" ? r.lockHash : "";
+    if (!lh && !rh) return cloneValue(ctx.preferLocal ? l : r);
+    if (!lh) { ctx.remoteTouched = true; return cloneValue(r); }
+    if (!rh) return cloneValue(l);
+    if (lh === rh) {
+      var sameAt = String(l.updatedAt || "") > String(r.updatedAt || "") ? l.updatedAt : r.updatedAt;
+      var out = { lockHash: lh };
+      if (sameAt) out.updatedAt = sameAt;
+      return out;
+    }
+    var lt = String(l.updatedAt || "");
+    var rt = String(r.updatedAt || "");
+    if (lt > rt) return cloneValue(l);
+    if (rt > lt) {
+      ctx.remoteTouched = true;
+      return cloneValue(r);
+    }
+    // 시각까지 같으면 이 기기에서 입력한 것을 존중한다
+    return cloneValue(l);
   }
 
   // 지운 항목 표시(tombstone) — 한 번 지운 id 는 어느 기기에서도 되살아나지 않는다

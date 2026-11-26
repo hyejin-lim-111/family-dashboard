@@ -44,6 +44,9 @@ function check(name, cond, extra) {
   // 이 테스트는 이 기기 저장(local) 모드만 검증한다. 실시간 동기화 어댑터는 store-sync-test.cjs에서 검증.
   window.FAMILY_CONFIG.supabase = { url: "", anonKey: "", table: "family_state", rowId: "main", realtime: false };
   load("store.js");
+  load("lock.js");
+  // 잠금 해제된 기기로 시작 (입장 비밀번호 동작은 lock-test.cjs 에서 따로 검증)
+  window.localStorage.setItem(window.FamilyLock.AUTH_KEY, JSON.stringify({ hash: window.FamilyLock.DEFAULT_HASH, at: new Date().toISOString() }));
   load("app.js");
 
   await sleep(400); // let boot promise settle

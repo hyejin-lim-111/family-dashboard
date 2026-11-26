@@ -3,7 +3,7 @@
 const { spawnSync } = require("child_process");
 const path = require("path");
 
-const files = ["static-check.cjs", "boot-test.cjs", "compat-test.cjs", "evening-test.cjs", "row-tap-test.cjs", "store-sync-test.cjs", "merge-sync-test.cjs", "home-layout-test.cjs", "growth-chat-test.cjs", "quick-phrase-test.cjs", "pet-test.cjs", "allowance-test.cjs", "holiday-weather-quiz-test.cjs", "morning-prep-test.cjs", "highfive-test.cjs", "wake-lock-test.cjs", "pwa-test.cjs"];
+const files = ["static-check.cjs", "boot-test.cjs", "lock-test.cjs", "compat-test.cjs", "evening-test.cjs", "row-tap-test.cjs", "store-sync-test.cjs", "merge-sync-test.cjs", "home-layout-test.cjs", "growth-chat-test.cjs", "quick-phrase-test.cjs", "pet-test.cjs", "allowance-test.cjs", "holiday-weather-quiz-test.cjs", "morning-prep-test.cjs", "highfive-test.cjs", "wake-lock-test.cjs", "pwa-test.cjs"];
 let failed = 0;
 
 for (const f of files) {

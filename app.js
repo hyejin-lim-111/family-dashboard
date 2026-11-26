@@ -8,6 +8,7 @@
 
   var CFG = window.FAMILY_CONFIG;
   var Store = window.FamilyStore;
+  var Lock = window.FamilyLock || null;   // 입장 비밀번호 잠금 (lock.js)
   var GROWTH_LMS = window.GROWTH_LMS || null;
 
   /* ---------- 상수 ---------- */
@@ -756,6 +757,7 @@
   var unsubStore = null;
   var saveTimer = null;
   var meId = null;
+  var lockGate = { ready: false, unlocked: false, fails: 0 };
   var chatSeenIds = {};          // 이미 화면에 올라온 채팅 id (새 메시지 알림 판별용)
   var timer = { mode: "countdown", running: false, remaining: 0, elapsed: 0, itemId: null, intId: null };
   var lastStampTotal = null;
@@ -846,7 +848,7 @@
     if (!s) s = freshState();
     // 알려진 필드만 유지 (이상한 데이터 방어)
     var out = freshState();
-    ["members", "study", "stamps", "badges", "dex", "mission", "todos", "chat", "quickPhrases", "calendar", "checklists", "routine", "growth", "pet", "quiz", "morningPrep", "settings", "deleted"].forEach(function (k) {
+    ["members", "study", "stamps", "badges", "dex", "mission", "todos", "chat", "quickPhrases", "calendar", "checklists", "routine", "growth", "pet", "quiz", "morningPrep", "settings", "security", "deleted"].forEach(function (k) {
       if (s[k] !== undefined) out[k] = s[k];
     });
     if (!out.deleted || typeof out.deleted !== "object" || Array.isArray(out.deleted)) out.deleted = {};
@@ -4877,6 +4879,183 @@
   }
 
   /* =========================================================
+     🔒 입장 비밀번호 잠금
+     · 비밀번호는 SHA-256 해시로만 비교해요 (lock.js) — 평문은 저장하지 않아요
+     · 한 번 맞힌 기기는 localStorage 에 인증을 기억해 다음에 바로 열려요
+     · 설정에서 비밀번호를 바꾸면 state.security 가 가족 저장소로 동기화돼
+       다른 기기도 새 비밀번호로 들어오게 됩니다
+     ========================================================= */
+  function currentLockHash() {
+    if (!Lock) return "";
+    return Lock.hashFromState(state);
+  }
+
+  function showLockScreen() {
+    lockGate.unlocked = false;
+    document.body.classList.add("lock-on");
+    var scr = qs("#lockScreen");
+    if (scr) scr.hidden = false;
+    var btn = qs("#lockSubmit");
+    if (btn) btn.disabled = !lockGate.ready;
+    var note = qs("#lockNote");
+    if (note) {
+      note.hidden = false;
+      note.textContent = lockGate.ready
+        ? "비밀번호를 잊었을 때는 가족에게 물어봐요. 설정에서 바꿀 수 있어요."
+        : "잠금 화면을 준비하고 있어요…";
+    }
+    var inp = qs("#lockInput");
+    if (inp && lockGate.ready) {
+      inp.value = "";
+      try { inp.focus(); } catch (e) { /* 무시 */ }
+    }
+  }
+
+  function hideLockScreen() {
+    lockGate.unlocked = true;
+    document.body.classList.remove("lock-on");
+    var scr = qs("#lockScreen");
+    if (scr) scr.hidden = true;
+    hideLockError();
+  }
+
+  function showLockError(msg) {
+    var box = qs("#lockError");
+    if (box) {
+      box.textContent = msg || "비밀번호가 맞지 않아요. 다시 넣어 주세요.";
+      box.hidden = false;
+    }
+    var card = qs("#lockCard");
+    if (card) {
+      card.classList.remove("is-shake");
+      // 같은 클래스를 다시 붙여도 애니메이션이 다시 돌게
+      void card.offsetWidth;
+      card.classList.add("is-shake");
+    }
+  }
+
+  function hideLockError() {
+    var box = qs("#lockError");
+    if (box) { box.hidden = true; box.textContent = ""; }
+  }
+
+  // 비밀번호를 맞히면 대시보드로 들어간다 (기기 프로필이 없으면 그다음에 프로필을 고른다)
+  function enterApp() {
+    var saved = readDeviceLock();
+    if (saved && memberById(saved)) {
+      applyDevice(saved);
+    } else {
+      meId = null;
+      renderGate();
+      updateLockBtn();
+      renderAll();
+    }
+    renderAll();
+  }
+
+  function tryUnlock() {
+    if (!lockGate.ready) return;
+    var inp = qs("#lockInput");
+    var val = inp ? String(inp.value || "") : "";
+    if (!val.trim()) {
+      showLockError("비밀번호를 넣어 주세요.");
+      return;
+    }
+    var hash = currentLockHash();
+    if (Lock && Lock.verify(val, hash)) {
+      Lock.writeAuth(hash);
+      lockGate.fails = 0;
+      hideLockScreen();
+      if (inp) inp.value = "";
+      enterApp();
+      toast("어서 와요! 우리 가족 기록장 💗", "🔓");
+      return;
+    }
+    lockGate.fails += 1;
+    showLockError(lockGate.fails >= 3
+      ? "아직 맞지 않아요. 대소문자·숫자를 확인하고 다시 넣어 주세요."
+      : "비밀번호가 맞지 않아요. 다시 넣어 주세요.");
+    if (inp) { inp.value = ""; try { inp.focus(); } catch (e) { /* 무시 */ } }
+  }
+
+  // 이 기기 잠그기 — 인증을 지우고 화면에 그려 둔 가족 기록도 비운다
+  function lockThisDevice() {
+    if (Lock) Lock.clearAuth();
+    meId = null;
+    try { localStorage.removeItem(CFG.app.deviceKey); } catch (e) { /* 무시 */ }
+    hideChatBanner();
+    var gate = qs("#deviceGate");
+    if (gate) gate.hidden = true;
+    if (!qs("#modalRoot").hidden) closeModal();
+    ["homeContent", "prepContent", "studyContent", "petContent", "missionContent",
+      "togetherContent", "growthContent", "chatList", "quickGrid", "stickerSheet"].forEach(function (id) {
+      var el = qs("#" + id);
+      if (el) el.innerHTML = "";
+    });
+    updateLockBtn();
+    lockGate.ready = true;
+    showLockScreen();
+  }
+
+  function openLockChange() {
+    openModal(
+      '<h4 class="title-font" style="font-size:14px;color:#5A463C">🔑 입장 비밀번호 변경</h4>' +
+      '<p class="muted" style="font-size:11.5px;margin-top:4px;line-height:1.6">' +
+        '새 비밀번호는 4~12자(숫자·글자)면 돼요. 바꾸면 이 기록장을 쓰는 모든 기기에 함께 적용되고, ' +
+        '다른 기기에서는 새 비밀번호로 다시 들어와야 해요.' +
+      '</p>' +
+      '<form class="lock-change-form" id="lockChangeForm" autocomplete="off">' +
+        '<div class="field"><label for="lockCur">현재 비밀번호</label>' +
+          '<input type="password" id="lockCur" autocomplete="current-password" maxlength="32"></div>' +
+        '<div class="field"><label for="lockNew">새 비밀번호</label>' +
+          '<input type="password" id="lockNew" autocomplete="new-password" maxlength="12"></div>' +
+        '<div class="field"><label for="lockNew2">새 비밀번호 확인</label>' +
+          '<input type="password" id="lockNew2" autocomplete="new-password" maxlength="12"></div>' +
+        '<p class="lock-form-error" id="lockChangeError" hidden role="alert"></p>' +
+        '<div class="modal-actions">' +
+          '<button class="btn btn-ghost" type="button" data-action="close-modal">취소</button>' +
+          '<button class="btn btn-primary" type="submit" id="lockChangeSave">바꾸기</button>' +
+        '</div>' +
+      '</form>',
+      { title: "입장 비밀번호 변경" }
+    );
+    var cur = qs("#lockCur");
+    if (cur) { try { cur.focus(); } catch (e) { /* 무시 */ } }
+  }
+
+  function lockChangeError(msg) {
+    var box = qs("#lockChangeError");
+    if (!box) return;
+    box.textContent = msg || "";
+    box.hidden = !msg;
+  }
+
+  function saveLockChange() {
+    var cur = qs("#lockCur");
+    var n1 = qs("#lockNew");
+    var n2 = qs("#lockNew2");
+    var curVal = cur ? String(cur.value || "") : "";
+    var next = n1 ? String(n1.value || "").trim() : "";
+    var again = n2 ? String(n2.value || "").trim() : "";
+    if (!Lock) { lockChangeError("이 기기에서는 비밀번호를 바꿀 수 없어요."); return; }
+    if (!Lock.verify(curVal, currentLockHash())) {
+      lockChangeError("현재 비밀번호가 맞지 않아요.");
+      if (cur) { cur.value = ""; try { cur.focus(); } catch (e) { /* 무시 */ } }
+      return;
+    }
+    if (next.length < 4) { lockChangeError("새 비밀번호는 4자 이상으로 정해 주세요."); if (n1) { try { n1.focus(); } catch (e) { /* 무시 */ } } return; }
+    if (next.length > 12) { lockChangeError("새 비밀번호는 12자까지 넣을 수 있어요."); return; }
+    if (next !== again) { lockChangeError("새 비밀번호를 두 번 똑같이 넣어 주세요."); if (n2) { n2.value = ""; try { n2.focus(); } catch (e) { /* 무시 */ } } return; }
+    var nextHash = Lock.sha256(next);
+    state.security = { lockHash: nextHash, updatedAt: new Date().toISOString() };
+    persist(true);
+    // 이 기기는 새 비밀번호로 바로 이어서 쓸 수 있게 인증을 새로 적어 둔다
+    Lock.writeAuth(nextHash);
+    closeModal();
+    toast("비밀번호를 바꿨어요. 다른 기기에서는 새 비밀번호로 들어와 주세요", "🔑");
+  }
+
+  /* =========================================================
      화면 켜짐 유지 (Screen Wake Lock)
      · 태블릿에서 기록장을 열어 두면, 끄기 전까지 화면이 저절로 꺼지지 않게 해요.
      · 이 설정은 그 기기에만 적용돼요 (localStorage). 가족 저장소(Supabase)로 보내지 않아요.
@@ -5077,6 +5256,13 @@
         '<div class="sr-sub">기록을 파일로 내려받거나, 파일로 되살릴 수 있어요</div></div>' +
         '<span><button class="btn btn-xs btn-ghost" type="button" data-action="export-data">내보내기</button> ' +
         '<button class="btn btn-xs btn-ghost" type="button" data-action="import-data">불러오기</button></span></div>' +
+      '<h4 class="title-font" style="font-size:14px;color:#5A463C;margin-top:10px">🔒 잠금</h4>' +
+      '<div class="setting-row"><div class="sr-main"><div class="sr-title">입장 비밀번호</div>' +
+        '<div class="sr-sub">이 기록장을 열 때 필요한 비밀번호예요. 바꾸면 모든 기기에 함께 적용돼요.</div></div>' +
+        '<button class="btn btn-xs btn-ghost" type="button" data-action="lock-change">🔑 비밀번호 변경</button></div>' +
+      '<div class="setting-row"><div class="sr-main"><div class="sr-title">이 기기 잠그기</div>' +
+        '<div class="sr-sub">이 기기에서 나가고 비밀번호 화면으로 돌아가요.</div></div>' +
+        '<button class="btn btn-xs btn-soft" type="button" data-action="lock-now">🔒 이 기기 잠그기</button></div>' +
       '<h4 class="title-font" style="font-size:14px;color:#5A463C;margin-top:10px">화면</h4>' +
       '<div class="setting-row" id="wakeSettingRow"><div class="sr-main">' +
         '<div class="sr-title" id="wakeSetTitle">화면 켜짐 유지 ' + (wake.on ? "켜짐" : "꺼짐") + '</div>' +
@@ -5719,6 +5905,13 @@
 
       /* settings */
       case "open-settings": renderSettings(); break;
+      case "lock-change": openLockChange(); break;
+      case "lock-now":
+        confirmModal("이 기기 잠그기", "이 기기에서 나가고 비밀번호 화면으로 돌아가요. 가족 기록은 그대로예요.", "잠글래요", function () {
+          lockThisDevice();
+          toast("이 기기를 잠갔어요", "🔒");
+        });
+        break;
       case "toggle-wake": wakeSet(!wake.on); break;
       case "reset-avatars":
         state.members.forEach(function (m) { m.photo = ""; });
@@ -5778,6 +5971,22 @@
     if (file) attachPhoto(file);
   });
 
+  /* 🔒 입장 비밀번호 입력 */
+  if (qs("#lockForm")) {
+    qs("#lockForm").addEventListener("submit", function (e) {
+      e.preventDefault();
+      tryUnlock();
+    });
+  }
+
+  /* 🔑 설정에서 비밀번호 바꾸기 */
+  document.addEventListener("submit", function (e) {
+    var form = e.target;
+    if (!form || form.id !== "lockChangeForm") return;
+    e.preventDefault();
+    saveLockChange();
+  });
+
   // 함께 체크리스트의 “항목 추가” 줄
   document.addEventListener("submit", function (e) {
     var form = e.target;
@@ -5808,6 +6017,14 @@
     isActive: function () { return wake.active; },
     isSupported: function () { return wake.supported; },
     state: function () { return { on: wake.on, active: wake.active, supported: wake.supported, failed: wake.failed }; }
+  };
+  // 🔒 입장 잠금 — 테스트·확인용 (화면에는 영향 없음)
+  window.FamilyLockGate = {
+    state: function () {
+      return { ready: lockGate.ready, unlocked: lockGate.unlocked, hash: currentLockHash() };
+    },
+    lockNow: lockThisDevice,
+    tryPassword: function (text) { var inp = qs("#lockInput"); if (inp) inp.value = text; tryUnlock(); }
   };
   /* ---------- 앱처럼 설치(PWA) · 서비스 워커 ----------
      GitHub Pages 서브경로(/family-dashboard/)에서도 동작하도록 상대 경로('./sw.js')로 등록해요.
@@ -5856,6 +6073,8 @@
       state = normalizeState(payload);
       rememberChat(state.chat);
       pruneChatPhotos();
+      // 잠겨 있을 때는 화면을 그리지 않아요 (입장 비밀번호를 맞힌 뒤에 그려요)
+      if (!lockGate.unlocked) return;
       renderAll();
       if (incoming.length) noteIncoming(incoming);
     });
@@ -5865,18 +6084,23 @@
       rememberChat(state.chat);
       // 도장 변화 추적용 초기화
       lastStampTotal = stampTotal();
+      lockGate.ready = true;
 
-      var saved = readDeviceLock();
-      if (saved && memberById(saved)) {
-        applyDevice(saved);
-      } else {
+      // 이 기기에 입장 인증이 없으면 대시보드 본문을 감추고 비밀번호 화면을 먼저 보여 준다
+      if (!Lock) {
         meId = null;
-        renderGate();
+        lockGate.ready = false;
+        showLockScreen();
+        showLockError("잠금 화면을 불러오지 못했어요. 새로고침해 주세요.");
         updateLockBtn();
-        renderAll();
+      } else if (!Lock.isUnlocked(currentLockHash())) {
+        meId = null;
+        showLockScreen();
+        updateLockBtn();
+      } else {
+        hideLockScreen();
+        enterApp();
       }
-      // 첫 렌더에서 날씨 카드 먼저 그려두기
-      renderAll();
     });
 
     // 앱처럼 설치해서 쓸 수 있게 (홈 화면에 추가) 서비스 워커 등록

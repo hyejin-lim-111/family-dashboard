@@ -89,6 +89,9 @@ function boot(opts) {
   load("config.js");
   window.FAMILY_CONFIG.supabase = { url: "", anonKey: "", table: "family_state", rowId: "main", realtime: false };
   load("store.js");
+  load("lock.js");
+  // 잠금 해제된 기기로 시작 (입장 비밀번호 동작은 lock-test.cjs 에서 따로 검증)
+  window.localStorage.setItem(window.FamilyLock.AUTH_KEY, JSON.stringify({ hash: window.FamilyLock.DEFAULT_HASH, at: new Date().toISOString() }));
   load("app.js");
 
   const $ = (s) => document.querySelector(s);

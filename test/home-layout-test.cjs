@@ -19,8 +19,9 @@ const y = kst.getUTCFullYear();
 const m = kst.getUTCMonth() + 1;
 const d = kst.getUTCDate();
 const todayKey = y + "-" + pad(m) + "-" + pad(d);
-const otherDay = d + 4 <= 28 ? d + 4 : d - 4;
-const otherKey = y + "-" + pad(m) + "-" + pad(otherDay);
+// "다가오는 일정"에 잡히도록 오늘부터 4일 뒤 (달이 바뀌어도 정확히)
+const otherDate = new Date(Date.UTC(y, kst.getUTCMonth(), d) + 4 * 24 * 3600 * 1000);
+const otherKey = otherDate.getUTCFullYear() + "-" + pad(otherDate.getUTCMonth() + 1) + "-" + pad(otherDate.getUTCDate());
 
 const payload = {
   version: 1,
@@ -75,6 +76,9 @@ const payload = {
   load("config.js");
   window.FAMILY_CONFIG.supabase = { url: "", anonKey: "", table: "family_state", rowId: "main", realtime: false };
   load("store.js");
+  load("lock.js");
+  // 잠금 해제된 기기로 시작 (입장 비밀번호 동작은 lock-test.cjs 에서 따로 검증)
+  window.localStorage.setItem(window.FamilyLock.AUTH_KEY, JSON.stringify({ hash: window.FamilyLock.DEFAULT_HASH, at: new Date().toISOString() }));
   load("app.js");
   await sleep(700);
 

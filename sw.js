@@ -7,7 +7,7 @@
      손대지 않고 그대로 네트워크로 보냅니다. (캐시·가로채기 없음)
    ========================================================= */
 
-var VERSION = "20261123-1";
+var VERSION = "20261126-1";
 var CACHE_NAME = "family-dashboard-" + VERSION;
 var SCOPE = self.registration ? self.registration.scope : "/family-dashboard/";
 
@@ -16,6 +16,7 @@ var PRECACHE = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
+  "./lock.js",
   "./assets/icon-192.png",
   "./assets/icon-512.png",
   "./assets/icon-maskable-512.png",
