@@ -13,13 +13,13 @@ function check(name, cond, extra) {
 }
 
 const FOOD = [
-  { id: "f1", place_name: "분당 김치찌개집", category_name: "음식점 > 한식 > 찌개", distance: "120", road_address_name: "성남시 분당구 판교로 1", phone: "031-111-2222", place_url: "https://place.map.kakao.com/1", x: "127.10", y: "37.39" },
-  { id: "f2", place_name: "판교 짬뽕관", category_name: "음식점 > 중식 > 짬뽕", distance: "340", road_address_name: "성남시 분당구 판교로 2", phone: "031-222-3333", place_url: "https://place.map.kakao.com/2", x: "127.11", y: "37.39" },
-  { id: "f3", place_name: "초밥야", category_name: "음식점 > 일식 > 초밥", distance: "480", road_address_name: "성남시 분당구 판교로 3", phone: "", place_url: "https://place.map.kakao.com/3", x: "127.12", y: "37.40" },
-  { id: "f4", place_name: "판교 파스타", category_name: "음식점 > 양식 > 이탈리안", distance: "900", road_address_name: "성남시 분당구 판교로 4", phone: "031-444-5555", place_url: "https://place.map.kakao.com/4", x: "127.13", y: "37.41" },
+  { id: "f1", place_name: "분당 김치찌개집", category_name: "음식점 > 한식 > 찌개", distance: "120", road_address_name: "성남시 분당구 판교로 1", phone: "031-111-2222", place_url: "https://place.map.kakao.com/1", x: "127.10", y: "37.39108" },
+  { id: "f2", place_name: "판교 짬뽕관", category_name: "음식점 > 중식 > 짬뽕", distance: "340", road_address_name: "성남시 분당구 판교로 2", phone: "031-222-3333", place_url: "https://place.map.kakao.com/2", x: "127.10", y: "37.39306" },
+  { id: "f3", place_name: "초밥야", category_name: "음식점 > 일식 > 초밥", distance: "480", road_address_name: "성남시 분당구 판교로 3", phone: "", place_url: "https://place.map.kakao.com/3", x: "127.10", y: "37.39431" },
+  { id: "f4", place_name: "판교 파스타", category_name: "음식점 > 양식 > 이탈리안", distance: "280", road_address_name: "성남시 분당구 판교로 4", phone: "031-444-5555", place_url: "https://place.map.kakao.com/4", x: "127.10", y: "37.39250" },
 ];
 const CAFES = [
-  { id: "c1", place_name: "카페 어딘가", category_name: "음식점 > 카페,디저트 > 카페", distance: "200", road_address_name: "성남시 분당구 판교로 9", phone: "", place_url: "https://place.map.kakao.com/9", x: "127.14", y: "37.39" },
+  { id: "c1", place_name: "카페 어딘가", category_name: "음식점 > 카페,디저트 > 카페", distance: "200", road_address_name: "성남시 분당구 판교로 9", phone: "", place_url: "https://place.map.kakao.com/9", x: "127.10", y: "37.39180" },
 ];
 
 (async function main() {
@@ -50,18 +50,7 @@ const CAFES = [
         Places: function () {
           this.categorySearch = function (code, cb, opts) {
             searches.push({ type: "category", code, radius: opts && opts.radius });
-            if (code === "CE7") {
-              setTimeout(() => cb(CAFES, "OK", { hasNextPage: false }), 5);
-              return;
-            }
-            // 1페이지 → nextPage() → 2페이지 (카카오 페이지 나눔 확인)
-            const page1 = FOOD.slice(0, 2);
-            const page2 = FOOD.slice(2);
-            let page = 0;
-            const send = (data) => setTimeout(() => cb(data, "OK", page === 0
-              ? { hasNextPage: true, nextPage: () => { page = 1; send(page2); } }
-              : { hasNextPage: false }), 5);
-            send(page1);
+            setTimeout(() => cb(code === "CE7" ? CAFES : FOOD, "OK"), 5);
           };
           this.keywordSearch = function (q, cb) {
             searches.push({ type: "keyword", q });
@@ -100,7 +89,7 @@ const CAFES = [
   check("FD6 + CE7 둘 다 검색(전체)", searches.some((s) => s.code === "FD6") && searches.some((s) => s.code === "CE7"), JSON.stringify(searches));
   check("기본 반경 500m", searches[0] && searches[0].radius === 500, String(searches[0] && searches[0].radius));
   check("목록에 음식점 + 카페", restRows().length === FOOD.length + CAFES.length, String(restRows().length));
-  check("2페이지까지 이어 받음", restRows().some((r) => r.textContent.includes("판교 파스타")));
+  check("중심을 옮겨 여러 번 검색(커버리지)", searches.filter((s) => s.type === "category").length >= 10, String(searches.filter((s) => s.type === "category").length));
   check("상태 줄에 '현재 위치'", $("#placeStatus").textContent.includes("현재 위치"), $("#placeStatus").textContent);
   check("가까운 순 정렬", restRows()[0].textContent.includes("김치찌개집"), restRows()[0].textContent);
   check("거리 표시", restRows()[0].textContent.includes("120m"), restRows()[0].textContent);

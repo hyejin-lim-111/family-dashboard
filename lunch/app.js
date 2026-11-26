@@ -789,6 +789,29 @@
     return out;
   }
 
+  function haversine(aLat, aLng, bLat, bLng) {
+    var R = 6371000;
+    var toRad = Math.PI / 180;
+    var dLat = (bLat - aLat) * toRad;
+    var dLng = (bLng - aLng) * toRad;
+    var s = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(aLat * toRad) * Math.cos(bLat * toRad) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    return Math.round(2 * R * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s)));
+  }
+
+  // 카카오는 한 번 검색에 15곳까지만 준다 → 중심을 조금씩 옮겨 여러 번 검색해 모은다
+  function searchCenters(lat, lng, radius) {
+    var dLat = (radius * 0.55) / 111320;
+    var dLng = (radius * 0.55) / (111320 * Math.max(0.2, Math.cos(lat * Math.PI / 180)));
+    return [
+      { lat: lat, lng: lng },
+      { lat: lat + dLat, lng: lng },
+      { lat: lat - dLat, lng: lng },
+      { lat: lat, lng: lng + dLng },
+      { lat: lat, lng: lng - dLng }
+    ];
+  }
+
   function findPlaces() {
     if (ui.places.lat === null || ui.places.lng === null) { locate(); return; }
     if (!CFG.kakaoAppKey) { handleKakaoError(new Error("nokey")); return; }
@@ -797,17 +820,15 @@
     loadKakao().then(function () {
       var maps = global.kakao.maps;
       var services = maps.services;
-      var center = new maps.LatLng(ui.places.lat, ui.places.lng);
+      var centers = searchCenters(ui.places.lat, ui.places.lng, ui.places.radius);
       var queries = categoryQueries();
       var collected = {};
-      var pending = queries.length;
-      var MAX_PAGES = 3;   // 카카오는 한 번에 15곳씩 → 최대 45곳까지
+      var pending = centers.length * queries.length;
 
-      function done() {
-        pending -= 1;
-        if (pending > 0) return;
+      function finish() {
         ui.loadingPlaces = false;
         var items = Object.keys(collected).map(function (k) { return collected[k]; })
+          .filter(function (p) { return p.distance <= Math.round(ui.places.radius * 1.05); })
           .sort(function (a, b) { return a.distance - b.distance; });
         // 분류를 고르면 그 분류 음식점만 남긴다
         if (ui.places.category !== "all" && ui.places.category !== "cafe") {
@@ -826,38 +847,48 @@
         if (!ui.places.items.length) toast("이 반경에는 음식점이 없어요. 반경을 넓혀 보세요.");
       }
 
+      function done() {
+        pending -= 1;
+        if (pending > 0) return;
+        finish();
+      }
+
       queries.forEach(function (q) {
-        var options = { location: center, radius: Math.min(ui.places.radius, 20000), sort: services.SortBy.DISTANCE };
-        var ps = new services.Places();
-        var pages = 0;
-        var handle = function (data, status, pagination) {
-          if (status === services.Status.OK && data) {
-            data.forEach(function (place) {
-              var id = String(place.id || (place.place_name + "|" + place.x + "," + place.y));
-              if (collected[id]) return;
-              collected[id] = {
-                id: id,
-                name: place.place_name,
-                category: place.category_name || "",
-                kind: q.kind,
-                distance: Number(place.distance) || 0,
-                address: place.road_address_name || place.address_name || "",
-                phone: place.phone || "",
-                url: place.place_url || "",
-                x: Number(place.x),
-                y: Number(place.y)
-              };
-            });
-          }
-          pages += 1;
-          if (status === services.Status.OK && pagination && pagination.hasNextPage && pages < MAX_PAGES) {
-            pagination.nextPage();   // 카카오 SDK 는 콜백 안에서 바로 호출해야 다음 장을 준다
-            return;
-          }
-          done();
-        };
-        try { ps.categorySearch(q.code, handle, options); }
-        catch (e) { handle([], "ERROR"); }
+        centers.forEach(function (c) {
+          var ps = new services.Places();
+          var options = {
+            location: new maps.LatLng(c.lat, c.lng),
+            radius: Math.min(ui.places.radius, 20000),
+            sort: services.SortBy.DISTANCE
+          };
+          var handle = function (data, status) {
+            if (status === services.Status.OK && data) {
+              data.forEach(function (place) {
+                var id = String(place.id || (place.place_name + "|" + place.x + "," + place.y));
+                if (collected[id]) return;
+                var lat = Number(place.y), lng = Number(place.x);
+                var dist = (isFinite(lat) && isFinite(lng))
+                  ? haversine(ui.places.lat, ui.places.lng, lat, lng)
+                  : (Number(place.distance) || 0);
+                collected[id] = {
+                  id: id,
+                  name: place.place_name,
+                  category: place.category_name || "",
+                  kind: q.kind,
+                  distance: dist,
+                  address: place.road_address_name || place.address_name || "",
+                  phone: place.phone || "",
+                  url: place.place_url || "",
+                  x: lng,
+                  y: lat
+                };
+              });
+            }
+            done();
+          };
+          try { ps.categorySearch(q.code, handle, options); }
+          catch (e) { handle([], "ERROR"); }
+        });
       });
     }).catch(function (err) {
       ui.loadingPlaces = false;
@@ -874,6 +905,7 @@
       var center = new maps.LatLng(ui.places.lat, ui.places.lng);
       if (!ui.map) ui.map = new maps.Map(el, { center: center, level: 5 });
       else ui.map.setCenter(center);
+      el.classList.add("has-map");
       ui.markers.forEach(function (m) { m.setMap(null); });
       ui.markers = [];
       var bounds = new maps.LatLngBounds();
