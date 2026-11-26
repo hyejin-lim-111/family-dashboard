@@ -827,9 +827,17 @@
           pending -= 1;
           if (pending > 0) return;
           ui.loadingPlaces = false;
-          ui.places.items = Object.keys(collected).map(function (k) { return collected[k]; })
+          var items = Object.keys(collected).map(function (k) { return collected[k]; })
             .sort(function (a, b) { return a.distance - b.distance; });
-          ui.places.excluded = ui.places.excluded.filter(function (id) { return collected[id]; });
+          // 분류를 고르면 그 분류 음식점만 남기고, 서랍에는 그 분류만 담는다
+          if (ui.places.category !== "all" && ui.places.category !== "cafe") {
+            var label = CAT_LABEL[ui.places.category] || "";
+            items = items.filter(function (p) { return String(p.category || "").indexOf(label) >= 0; });
+          }
+          ui.places.items = items;
+          var keep = {};
+          items.forEach(function (p) { keep[p.id] = true; });
+          ui.places.excluded = ui.places.excluded.filter(function (id) { return keep[id]; });
           ui.places.updatedAt = nowIso();
           savePlaces();
           renderPlaces();
