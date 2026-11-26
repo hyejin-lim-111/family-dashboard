@@ -105,6 +105,7 @@ const CAFES = [
   const cafeSearches = searches.slice(before);
   check("'카페·디저트'를 고르면 CE7 로만 검색", cafeSearches.length > 0 && cafeSearches.every((s) => s.code === "CE7"), JSON.stringify(cafeSearches.map((s) => s.code)));
   check("카페만 목록에", restRows().length === CAFES.length && restRows()[0].textContent.includes("카페 어딘가"), String(restRows().length));
+  check("카페를 고르면 제목도 카페·디저트", $("#restTitle").textContent.includes("카페"), $("#restTitle").textContent);
 
   const beforeAll = searches.length;
   click($$("#placeFilter .chip").find((c) => c.getAttribute("data-cat") === "all"));
@@ -112,6 +113,7 @@ const CAFES = [
   const allSearches = searches.slice(beforeAll);
   check("'전체'로 돌아오면 다시 FD6 만", allSearches.length > 0 && allSearches.every((s) => s.code === "FD6"), JSON.stringify(allSearches.map((s) => s.code)));
   check("'전체' 목록에 카페 없음", restRows().length === FOOD.length && !restRows().some((r) => r.textContent.includes("카페 어딘가")), String(restRows().length));
+  check("'전체' 제목은 주변 음식점", $("#restTitle").textContent.includes("음식점"), $("#restTitle").textContent);
 
   click($$("#radiusChips .chip").find((c) => c.getAttribute("data-radius") === "1000"));
   await sleep(150);

@@ -679,6 +679,8 @@
     var list = filteredPlaces().slice().sort(function (a, b) { return (a.distance || 0) - (b.distance || 0); });
     var countEl = $("#restCount");
     if (countEl) countEl.textContent = list.length ? list.length + "곳" : "";
+    var titleEl = $("#restTitle");
+    if (titleEl) titleEl.textContent = ui.places.category === "cafe" ? "주변 카페·디저트" : "주변 음식점";
     if (ui.loadingPlaces) {
       box.innerHTML = '<li class="empty">주변 맛집을 찾고 있어요…</li>';
       return;
