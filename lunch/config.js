@@ -21,7 +21,8 @@ window.LUNCH_CONFIG = {
   },
 
   /* ---------- 카카오맵 (주변 맛집) ----------
-     카카오 디벨로퍼스 > 내 애플리케이션 > 앱 키 > JavaScript 키.
+     카카오 디벨로퍼스 > 내 애플리케이션 > 앱 키 > **JavaScript 키**.
+     (REST API 키·Admin 키를 넣으면 지도 SDK가 "domain mismatched" 로 거부합니다.)
      비워 두면 "내 위치 주변 맛집" 탭에 안내 문구가 나옵니다.
      플랫폼 > Web 에 https://hyejin-lim-111.github.io 도메인을 등록해야 동작해요. */
   kakaoAppKey: "9915cd11a65bb420e5e7668c005945a0",

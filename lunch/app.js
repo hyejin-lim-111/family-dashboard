@@ -729,7 +729,7 @@
       renderPlaceStatus();
       toast("카카오맵 JavaScript 키가 아직 없어요. config.js 의 kakaoAppKey 를 채워 주세요.");
     } else {
-      toast("카카오맵을 불러오지 못했어요. 인터넷 연결과 카카오 디벨로퍼스의 도메인 등록을 확인해 주세요.");
+      toast("카카오맵을 불러오지 못했어요. config.js 의 JavaScript 키와 카카오 디벨로퍼스의 도메인 등록을 확인해 주세요.");
     }
   }
 

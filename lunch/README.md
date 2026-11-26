@@ -43,6 +43,9 @@ alter publication supabase_realtime add table public.lunch_state;
 카카오 디벨로퍼스 → 내 애플리케이션 → **플랫폼 → Web** 에 `https://hyejin-lim-111.github.io` 를 등록해야 지도가 열립니다.
 키가 비어 있으면 「주변 맛집」 탭에 안내 문구가 나오고, 메뉴 뽑기는 그대로 동작해요.
 
+> ⚠️ 같은 앱의 **REST API 키**는 생김새가 같지만 지도 JavaScript SDK에는 쓸 수 없습니다.
+> REST 키를 넣으면 카카오가 `401 domain mismatched` 로 거부해 지도·주변 검색이 뜨지 않습니다. 반드시 **JavaScript 키**를 사용하세요.
+
 ## 동기화 방식 (덮어쓰지 않는 공유)
 
 - 저장은 **Read → Merge → Write**: 저장 직전에 서버의 최신 상태를 먼저 받아, 이 기기가 바꾼 것만 얹어 다시 올립니다.
