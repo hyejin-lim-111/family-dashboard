@@ -851,7 +851,7 @@
           }
           pages += 1;
           if (status === services.Status.OK && pagination && pagination.hasNextPage && pages < MAX_PAGES) {
-            setTimeout(function () { pagination.nextPage(); }, 40);
+            pagination.nextPage();   // 카카오 SDK 는 콜백 안에서 바로 호출해야 다음 장을 준다
             return;
           }
           done();
