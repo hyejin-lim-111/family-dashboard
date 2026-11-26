@@ -143,7 +143,7 @@ console.log("\n[7] manifest (PWA)");
 
 console.log("\n[8] 서비스 워커 범위 (lunch/ 안만 캐시)");
 {
-  check("Network-First (fetch 먼저)", /fetch\(request\)\.then/.test(sw));
+  check("Network-First (fetch 먼저 · 캐시 건너뛰기)", /fetch\(request, \{ cache: "no-store" \}\)\.then|fetch\(request\)\.then/.test(sw));
   check("같은 origin 만", /url\.origin !== self\.location\.origin/.test(sw) && /return false/.test(sw));
   check("lunch 경로 밖 요청 제외", /url\.pathname\.indexOf\(base\) !== 0/.test(sw));
   check("sw.js 자신은 캐시 제외", /"\/sw\.js"/.test(sw));
