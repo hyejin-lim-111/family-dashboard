@@ -7,7 +7,7 @@
      절대 가로채지 않고 그대로 네트워크로 보냅니다.
    ========================================================= */
 
-var VERSION = "20261126-1";
+var VERSION = "20261126-2";
 var CACHE_NAME = "lunch-app-" + VERSION;
 var SCOPE = self.registration ? self.registration.scope : "/family-dashboard/lunch/";
 
@@ -72,7 +72,9 @@ self.addEventListener("fetch", function (event) {
   if (!isOwnAsset(request)) return;
 
   event.respondWith(
-    fetch(request).then(function (response) {
+    // GitHub Pages 가 10분간 브라우저 캐시를 허용하므로, 고친 파일이 바로 보이도록
+    // 네트워크에서 항상 새로 받는다(작은 앱이라 부담 없음).
+    fetch(request, { cache: "no-store" }).then(function (response) {
       if (response && response.ok && response.type === "basic") {
         var copy = response.clone();
         caches.open(CACHE_NAME).then(function (cache) {
