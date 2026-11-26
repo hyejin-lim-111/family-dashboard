@@ -86,10 +86,11 @@ const CAFES = [
   await sleep(30);
   click($("[data-action='locate']"));
   await sleep(200);
-  check("FD6 + CE7 둘 다 검색(전체)", searches.some((s) => s.code === "FD6") && searches.some((s) => s.code === "CE7"), JSON.stringify(searches));
+  check("'전체'는 FD6(음식점)만 검색 — 카페(CE7) 제외", searches.some((s) => s.code === "FD6") && !searches.some((s) => s.code === "CE7"), JSON.stringify(searches.map((s) => s.code)));
   check("기본 반경 500m", searches[0] && searches[0].radius === 500, String(searches[0] && searches[0].radius));
-  check("목록에 음식점 + 카페", restRows().length === FOOD.length + CAFES.length, String(restRows().length));
-  check("중심을 옮겨 여러 번 검색(커버리지)", searches.filter((s) => s.type === "category").length >= 10, String(searches.filter((s) => s.type === "category").length));
+  check("'전체' 목록에 음식점만 (카페 없음)", restRows().length === FOOD.length, String(restRows().length));
+  check("카페가 목록에 섞이지 않음", !restRows().some((r) => r.textContent.includes("카페 어딘가")));
+  check("중심을 옮겨 여러 번 검색(커버리지)", searches.filter((s) => s.type === "category").length >= 5, String(searches.filter((s) => s.type === "category").length));
   check("상태 줄에 '현재 위치'", $("#placeStatus").textContent.includes("현재 위치"), $("#placeStatus").textContent);
   check("가까운 순 정렬", restRows()[0].textContent.includes("김치찌개집"), restRows()[0].textContent);
   check("거리 표시", restRows()[0].textContent.includes("120m"), restRows()[0].textContent);
@@ -98,16 +99,24 @@ const CAFES = [
   check("주소 표시", restRows()[0].textContent.includes("판교로 1"));
 
   console.log("\n[2] 분류 필터 · 반경 변경");
+  const before = searches.length;
   click($$("#placeFilter .chip").find((c) => c.getAttribute("data-cat") === "cafe"));
   await sleep(150);
-  check("카페는 CE7 로만 검색", searches[searches.length - 1].code === "CE7", searches[searches.length - 1].code);
+  const cafeSearches = searches.slice(before);
+  check("'카페·디저트'를 고르면 CE7 로만 검색", cafeSearches.length > 0 && cafeSearches.every((s) => s.code === "CE7"), JSON.stringify(cafeSearches.map((s) => s.code)));
   check("카페만 목록에", restRows().length === CAFES.length && restRows()[0].textContent.includes("카페 어딘가"), String(restRows().length));
 
+  const beforeAll = searches.length;
   click($$("#placeFilter .chip").find((c) => c.getAttribute("data-cat") === "all"));
   await sleep(150);
+  const allSearches = searches.slice(beforeAll);
+  check("'전체'로 돌아오면 다시 FD6 만", allSearches.length > 0 && allSearches.every((s) => s.code === "FD6"), JSON.stringify(allSearches.map((s) => s.code)));
+  check("'전체' 목록에 카페 없음", restRows().length === FOOD.length && !restRows().some((r) => r.textContent.includes("카페 어딘가")), String(restRows().length));
+
   click($$("#radiusChips .chip").find((c) => c.getAttribute("data-radius") === "1000"));
   await sleep(150);
   check("반경 1000m 로 재검색", searches[searches.length - 1].radius === 1000, String(searches[searches.length - 1].radius));
+  check("넓힌 반경에서도 FD6 만", searches[searches.length - 1].code === "FD6");
 
   console.log("\n[3] '빼기' 토글 → 추첨에서 제외");
   const check1 = $("#restList input[data-action='toggle-place']");
@@ -124,14 +133,21 @@ const CAFES = [
 
   console.log("\n[4] 주소 검색 fallback");
   $("#placeQuery").value = "분당 정자동";
+  const beforeAddr = searches.length;
   click($("[data-action='search-address']"));
   await sleep(200);
   check("키워드 검색 호출", searches.some((s) => s.type === "keyword" && s.q === "분당 정자동"), JSON.stringify(searches.slice(-2)));
   check("검색한 주소가 상태 줄에", $("#placeStatus").textContent.includes("정자동"), $("#placeStatus").textContent);
-  check("그 위치로 다시 음식점 검색", searches.filter((s) => s.type === "category").length >= 6);
+  const addrSearches = searches.slice(beforeAddr).filter((s) => s.type === "category");
+  check("그 위치로 다시 음식점 검색(FD6 만)", addrSearches.length >= 5 && addrSearches.every((s) => s.code === "FD6"), JSON.stringify(addrSearches.map((s) => s.code)));
 
-  console.log("\n[5] 결과는 기기에 저장");
+  console.log("\n[5] 결과는 기기에 저장 — 저장된 목록에도 카페 없음");
   check("localStorage 에 맛집 저장", !!window.localStorage.getItem("lunch-app.places.v1"));
+  {
+    const saved = JSON.parse(window.localStorage.getItem("lunch-app.places.v1") || "{}");
+    const savedItems = Array.isArray(saved.items) ? saved.items : [];
+    check("저장된 목록에 카페 없음", !savedItems.some((p) => p && (p.kind === "cafe" || /카페|디저트/.test(String(p.category || "")))), String(savedItems.length));
+  }
 
   console.log("\n========================================");
   if (failures) { console.log("실패 " + failures + "개"); process.exit(1); }

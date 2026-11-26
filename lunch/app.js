@@ -644,9 +644,19 @@
     }
   }
 
+  // 카페(CE7)인지 — 분류 이름이나 검색 종류로 판단
+  function isCafePlace(p) {
+    if (!p) return false;
+    if (p.kind === "cafe") return true;
+    return /카페|디저트/.test(String(p.category || ""));
+  }
+
   function filteredPlaces() {
     var cat = ui.places.category;
-    if (cat === "all") return ui.places.items;
+    if (cat === "all") {
+      // '전체'는 식사용 음식점만 — 예전에 저장해 둔 카페가 섞여 있어도 빼고 보여 준다
+      return ui.places.items.filter(function (p) { return !isCafePlace(p); });
+    }
     return ui.places.items.filter(function (p) {
       var name = String(p.category || "");
       if (cat === "cafe") return /카페|디저트/.test(name) || p.kind === "cafe";
@@ -783,8 +793,9 @@
   function categoryQueries() {
     var cat = ui.places.category;
     var out = [];
+    // '카페·디저트'를 직접 고른 때만 CE7(카페)을 불러온다.
+    // '전체'는 식사용 음식점 FD6 만 — 추첨에 카페가 섞이지 않게.
     if (cat === "cafe") out.push({ code: "CE7", kind: "cafe" });
-    else if (cat === "all") { out.push({ code: "FD6", kind: "food" }); out.push({ code: "CE7", kind: "cafe" }); }
     else out.push({ code: "FD6", kind: "food" });
     return out;
   }
@@ -830,8 +841,11 @@
         var items = Object.keys(collected).map(function (k) { return collected[k]; })
           .filter(function (p) { return p.distance <= Math.round(ui.places.radius * 1.05); })
           .sort(function (a, b) { return a.distance - b.distance; });
-        // 분류를 고르면 그 분류 음식점만 남긴다
-        if (ui.places.category !== "all" && ui.places.category !== "cafe") {
+        // '전체'는 카페를 빼고 음식점만 남긴다 (카페는 '카페·디저트'를 고를 때만)
+        if (ui.places.category === "all") {
+          items = items.filter(function (p) { return !isCafePlace(p); });
+        } else if (ui.places.category !== "cafe") {
+          // 분류를 고르면 그 분류 음식점만 남긴다
           var label = CAT_LABEL[ui.places.category] || "";
           items = items.filter(function (p) { return String(p.category || "").indexOf(label) >= 0; });
         }
