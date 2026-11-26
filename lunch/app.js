@@ -797,15 +797,40 @@
     loadKakao().then(function () {
       var maps = global.kakao.maps;
       var services = maps.services;
-      var ps = new services.Places();
       var center = new maps.LatLng(ui.places.lat, ui.places.lng);
       var queries = categoryQueries();
       var collected = {};
       var pending = queries.length;
+      var MAX_PAGES = 3;   // 카카오는 한 번에 15곳씩 → 최대 45곳까지
+
+      function done() {
+        pending -= 1;
+        if (pending > 0) return;
+        ui.loadingPlaces = false;
+        var items = Object.keys(collected).map(function (k) { return collected[k]; })
+          .sort(function (a, b) { return a.distance - b.distance; });
+        // 분류를 고르면 그 분류 음식점만 남긴다
+        if (ui.places.category !== "all" && ui.places.category !== "cafe") {
+          var label = CAT_LABEL[ui.places.category] || "";
+          items = items.filter(function (p) { return String(p.category || "").indexOf(label) >= 0; });
+        }
+        ui.places.items = items;
+        var keep = {};
+        items.forEach(function (p) { keep[p.id] = true; });
+        ui.places.excluded = ui.places.excluded.filter(function (id) { return keep[id]; });
+        ui.places.updatedAt = nowIso();
+        savePlaces();
+        renderPlaces();
+        renderPlaceResult();
+        drawMap();
+        if (!ui.places.items.length) toast("이 반경에는 음식점이 없어요. 반경을 넓혀 보세요.");
+      }
 
       queries.forEach(function (q) {
         var options = { location: center, radius: Math.min(ui.places.radius, 20000), sort: services.SortBy.DISTANCE };
-        var handle = function (data, status) {
+        var ps = new services.Places();
+        var pages = 0;
+        var handle = function (data, status, pagination) {
           if (status === services.Status.OK && data) {
             data.forEach(function (place) {
               var id = String(place.id || (place.place_name + "|" + place.x + "," + place.y));
@@ -824,26 +849,12 @@
               };
             });
           }
-          pending -= 1;
-          if (pending > 0) return;
-          ui.loadingPlaces = false;
-          var items = Object.keys(collected).map(function (k) { return collected[k]; })
-            .sort(function (a, b) { return a.distance - b.distance; });
-          // 분류를 고르면 그 분류 음식점만 남기고, 서랍에는 그 분류만 담는다
-          if (ui.places.category !== "all" && ui.places.category !== "cafe") {
-            var label = CAT_LABEL[ui.places.category] || "";
-            items = items.filter(function (p) { return String(p.category || "").indexOf(label) >= 0; });
+          pages += 1;
+          if (status === services.Status.OK && pagination && pagination.hasNextPage && pages < MAX_PAGES) {
+            setTimeout(function () { pagination.nextPage(); }, 40);
+            return;
           }
-          ui.places.items = items;
-          var keep = {};
-          items.forEach(function (p) { keep[p.id] = true; });
-          ui.places.excluded = ui.places.excluded.filter(function (id) { return keep[id]; });
-          ui.places.updatedAt = nowIso();
-          savePlaces();
-          renderPlaces();
-          renderPlaceResult();
-          drawMap();
-          if (!ui.places.items.length) toast("이 반경에는 음식점이 없어요. 반경을 넓혀 보세요.");
+          done();
         };
         try { ps.categorySearch(q.code, handle, options); }
         catch (e) { handle([], "ERROR"); }

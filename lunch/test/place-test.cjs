@@ -50,8 +50,18 @@ const CAFES = [
         Places: function () {
           this.categorySearch = function (code, cb, opts) {
             searches.push({ type: "category", code, radius: opts && opts.radius });
-            const data = code === "CE7" ? CAFES : FOOD;
-            setTimeout(() => cb(data, "OK"), 5);
+            if (code === "CE7") {
+              setTimeout(() => cb(CAFES, "OK", { hasNextPage: false }), 5);
+              return;
+            }
+            // 1페이지 → nextPage() → 2페이지 (카카오 페이지 나눔 확인)
+            const page1 = FOOD.slice(0, 2);
+            const page2 = FOOD.slice(2);
+            let page = 0;
+            const send = (data) => setTimeout(() => cb(data, "OK", page === 0
+              ? { hasNextPage: true, nextPage: () => { page = 1; send(page2); } }
+              : { hasNextPage: false }), 5);
+            send(page1);
           };
           this.keywordSearch = function (q, cb) {
             searches.push({ type: "keyword", q });
@@ -90,6 +100,7 @@ const CAFES = [
   check("FD6 + CE7 둘 다 검색(전체)", searches.some((s) => s.code === "FD6") && searches.some((s) => s.code === "CE7"), JSON.stringify(searches));
   check("기본 반경 500m", searches[0] && searches[0].radius === 500, String(searches[0] && searches[0].radius));
   check("목록에 음식점 + 카페", restRows().length === FOOD.length + CAFES.length, String(restRows().length));
+  check("2페이지까지 이어 받음", restRows().some((r) => r.textContent.includes("판교 파스타")));
   check("상태 줄에 '현재 위치'", $("#placeStatus").textContent.includes("현재 위치"), $("#placeStatus").textContent);
   check("가까운 순 정렬", restRows()[0].textContent.includes("김치찌개집"), restRows()[0].textContent);
   check("거리 표시", restRows()[0].textContent.includes("120m"), restRows()[0].textContent);
