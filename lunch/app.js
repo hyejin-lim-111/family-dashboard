@@ -101,6 +101,7 @@
     places: {
       lat: null, lng: null, label: "",
       radius: 500, category: "all",
+      view: "all",            // all = 전체 맛, new = 🆕 새로 생긴 식당
       items: [], excluded: [], picked: null, updatedAt: null
     },
     map: null,
@@ -547,6 +548,9 @@
         label: saved.label || "",
         radius: [300, 500, 1000, 2000].indexOf(saved.radius) >= 0 ? saved.radius : 500,
         category: saved.category || "all",
+        view: saved.view === "new" ? "new" : "all",
+        // 예전에 저장한 목록에는 view/isNew 가 없을 수 있어 안전하게 다진다
+        // (items 는 아래에서 arr() 로 받는다)
         items: arr(saved.items),
         excluded: arr(saved.excluded),
         picked: saved.picked || null,
@@ -556,6 +560,75 @@
   }
   function savePlaces() {
     writeJSON(APP.placesKey, ui.places);
+  }
+
+  /* ---------------- 🆕 새로 생긴 식당 ---------------- */
+  // 카카오 장소 id 는 숫자 문자열이다. 개업일은 아니지만 "등록이 최신일수록 id 가 크다"는
+  // 경향이 있어, 최신 등록 추정순 정렬에만 쓴다(정확한 개업일은 카카오가 주지 않는다).
+  var NEW_KEYWORDS = ["신규오픈", "오픈"];
+  var NEW_NOTE = "카카오맵 최신 등록 추정순·신규 키워드 기반 (정확한 개업일은 미제공)";
+  var NEW_SNAPSHOT_KEY = "lunch-app.newplaces.v1";
+  var NEW_SNAPSHOT_MAX_KEYS = 12;
+  var NEW_SNAPSHOT_MAX_IDS = 400;
+
+  function isNewView() { return ui.places.view === "new"; }
+
+  function placeIdValue(id) {
+    var n = Number(String(id));
+    return isFinite(n) ? n : -1;   // 숫자가 아닌 fallback id 는 맨 뒤로
+  }
+
+  function compareNewest(a, b) {
+    var na = placeIdValue(a.id), nb = placeIdValue(b.id);
+    if (na !== nb) return nb - na;
+    return (a.distance || 0) - (b.distance || 0);
+  }
+
+  function compareDistance(a, b) { return (a.distance || 0) - (b.distance || 0); }
+
+  function sortByNewest(list) { return arr(list).slice().sort(compareNewest); }
+
+  // 같은 동네인지 판단하는 그리드 키 (위도·경도 3자리 ≈ 100m 격자)
+  function gridKey(lat, lng) {
+    if (!isFinite(lat) || !isFinite(lng)) return "";
+    return "g:" + Number(lat).toFixed(3) + "," + Number(lng).toFixed(3);
+  }
+
+  function loadNewSnapshots() {
+    var saved = readJSON(NEW_SNAPSHOT_KEY);
+    return (saved && typeof saved === "object" && !Array.isArray(saved)) ? saved : {};
+  }
+
+  function pruneNewSnapshots(snaps) {
+    var keys = Object.keys(snaps);
+    if (keys.length <= NEW_SNAPSHOT_MAX_KEYS) return snaps;
+    keys.sort(function (a, b) {
+      return String((snaps[b] && snaps[b].at) || "").localeCompare(String((snaps[a] && snaps[a].at) || ""));
+    });
+    keys.slice(NEW_SNAPSHOT_MAX_KEYS).forEach(function (k) { delete snaps[k]; });
+    return snaps;
+  }
+
+  // 이전 조회 스냅샷과 비교해 처음 보는 곳에 isNew 를 달고, 이번에 본 목록을 스냅샷에 남긴다.
+  // 같은 그리드(동네)에서 처음 조회할 때는 비교할 과거가 없으므로 아무것도 NEW 로 표시하지 않는다.
+  function markNewPlaces(items, lat, lng) {
+    var key = gridKey(lat, lng);
+    var list = arr(items);
+    if (!key) { list.forEach(function (p) { p.isNew = false; }); return list; }
+    var snaps = loadNewSnapshots();
+    var prev = (snaps[key] && Array.isArray(snaps[key].ids)) ? snaps[key].ids.map(String) : null;
+    var seen = {};
+    (prev || []).forEach(function (id) { seen[id] = true; });
+    list.forEach(function (p) { p.isNew = !!prev && !seen[p.id]; });
+    var ids = (prev || []).slice();
+    list.forEach(function (p) {
+      if (seen[p.id]) return;
+      seen[p.id] = true;
+      ids.push(p.id);
+    });
+    snaps[key] = { ids: ids.slice(-NEW_SNAPSHOT_MAX_IDS), at: nowIso() };
+    writeJSON(NEW_SNAPSHOT_KEY, pruneNewSnapshots(snaps));
+    return list;
   }
 
   var kakaoPromise = null;
@@ -594,6 +667,13 @@
     return kakaoPromise;
   }
 
+  function placeViewOptions() {
+    return [
+      { id: "all", label: "전체 맛집", emoji: "🍽️" },
+      { id: "new", label: "새로 생긴 식당", emoji: "🆕" }
+    ];
+  }
+
   function placeFilterCategory() {
     return [
       { id: "all", label: "전체" },
@@ -606,6 +686,13 @@
   }
 
   function renderPlaceChips() {
+    var viewBox = $("#viewChips");
+    if (viewBox) {
+      viewBox.innerHTML = placeViewOptions().map(function (v) {
+        return '<button type="button" class="chip chip-view' + (ui.places.view === v.id ? " is-active" : "") +
+          '" data-action="filter-view" data-view="' + esc(v.id) + '">' + v.emoji + " " + esc(v.label) + "</button>";
+      }).join("");
+    }
     var radiusBox = $("#radiusChips");
     if (radiusBox) {
       radiusBox.innerHTML = [
@@ -652,17 +739,28 @@
   }
 
   function filteredPlaces() {
+    // 분류·카페 규칙은 한 곳(placeMatchesCategory)에서만 판단한다
+    return ui.places.items.filter(placeMatchesCategory);
+  }
+
+  // 화면에 보여 줄 목록의 정렬 — 새로 생긴 식당 모드는 최신 등록 추정순, 나머지는 가까운 순
+  function displayPlaces() {
+    return filteredPlaces().slice().sort(isNewView() ? compareNewest : compareDistance);
+  }
+
+  function placeMatchesCategory(p) {
+    if (!p) return false;
     var cat = ui.places.category;
-    if (cat === "all") {
-      // '전체'는 식사용 음식점만 — 예전에 저장해 둔 카페가 섞여 있어도 빼고 보여 준다
-      return ui.places.items.filter(function (p) { return !isCafePlace(p); });
-    }
-    return ui.places.items.filter(function (p) {
-      var name = String(p.category || "");
-      if (cat === "cafe") return /카페|디저트/.test(name) || p.kind === "cafe";
-      var label = CAT_LABEL[cat] || "";
-      return label && name.indexOf(label) >= 0;
-    });
+    if (cat === "cafe") return isCafePlace(p);
+    // '전체'와 음식점 분류에서는 카페(CE7)를 빼고 보여 준다
+    if (isCafePlace(p)) return false;
+    if (cat === "all") return true;
+    var label = CAT_LABEL[cat] || "";
+    return !!label && String(p.category || "").indexOf(label) >= 0;
+  }
+
+  function newPlaceCount() {
+    return filteredPlaces().filter(function (p) { return p.isNew; }).length;
   }
 
   function placePool() {
@@ -674,21 +772,33 @@
   function renderPlaces() {
     renderPlaceChips();
     renderPlaceStatus();
+    var newMode = isNewView();
+    var note = $("#newNote");
+    if (note) note.hidden = !newMode;
+    var drawLabel = $("#restDrawLabel");
+    if (drawLabel) drawLabel.textContent = newMode ? "새로 생긴 식당" : "주변 맛집";
     var box = $("#restList");
     if (!box) return;
-    var list = filteredPlaces().slice().sort(function (a, b) { return (a.distance || 0) - (b.distance || 0); });
+    var list = displayPlaces();
     var countEl = $("#restCount");
-    if (countEl) countEl.textContent = list.length ? list.length + "곳" : "";
+    var fresh = newMode ? newPlaceCount() : 0;
+    if (countEl) countEl.textContent = list.length ? list.length + "곳" + (fresh ? " · NEW " + fresh : "") : "";
     var titleEl = $("#restTitle");
-    if (titleEl) titleEl.textContent = ui.places.category === "cafe" ? "주변 카페·디저트" : "주변 음식점";
+    if (titleEl) {
+      titleEl.textContent = newMode
+        ? (ui.places.category === "cafe" ? "새로 생긴 카페·디저트" : "새로 생긴 식당")
+        : (ui.places.category === "cafe" ? "주변 카페·디저트" : "주변 음식점");
+    }
     if (ui.loadingPlaces) {
-      box.innerHTML = '<li class="empty">주변 맛집을 찾고 있어요…</li>';
+      box.innerHTML = '<li class="empty">' + (newMode ? "새로 생긴 식당을 찾고 있어요…" : "주변 맛집을 찾고 있어요…") + "</li>";
       return;
     }
     if (!list.length) {
       box.innerHTML = '<li class="empty">' +
         (CFG.kakaoAppKey
-          ? "아직 불러온 맛집이 없어요. 위치를 잡고 ‘주변 맛집 찾기’를 눌러 주세요."
+          ? (newMode
+              ? "이 반경에서 새로 생긴 식당을 찾지 못했어요. 반경을 넓히거나 ‘전체 맛집’으로 보세요."
+              : "아직 불러온 맛집이 없어요. 위치를 잡고 ‘주변 맛집 찾기’를 눌러 주세요.")
           : "카카오맵 키가 설정되면 주변 맛집을 불러올 수 있어요.") + "</li>";
       return;
     }
@@ -704,6 +814,7 @@
         "</label>" +
         '<div class="rest-main">' +
           '<div class="rest-title"><span class="rest-name">' + esc(p.name) + "</span>" +
+            (p.isNew ? '<span class="new-badge">NEW</span>' : "") +
             (p.distance ? '<span class="rest-distance">' + esc(distanceText(p.distance)) + "</span>" : "") +
           "</div>" +
           '<p class="rest-meta">' + esc(leaf || p.category || "음식점") + "</p>" +
@@ -835,22 +946,43 @@
       var services = maps.services;
       var centers = searchCenters(ui.places.lat, ui.places.lng, ui.places.radius);
       var queries = categoryQueries();
+      // 🆕 새로 생긴 식당 모드에서는 '신규오픈'·'오픈' 같은 신규 키워드도 같이 찾아 결과를 보강한다
+      var keywords = isNewView() ? NEW_KEYWORDS.slice() : [];
       var collected = {};
-      var pending = centers.length * queries.length;
+      var pending = centers.length * (queries.length + keywords.length);
+
+      function addPlace(place, kindHint) {
+        if (!place || !place.place_name) return;
+        var id = String(place.id || (place.place_name + "|" + place.x + "," + place.y));
+        if (collected[id]) return;
+        var lat = Number(place.y), lng = Number(place.x);
+        var dist = (isFinite(lat) && isFinite(lng))
+          ? haversine(ui.places.lat, ui.places.lng, lat, lng)
+          : (Number(place.distance) || 0);
+        var category = place.category_name || "";
+        collected[id] = {
+          id: id,
+          name: place.place_name,
+          category: category,
+          kind: kindHint || (/카페|디저트/.test(category) ? "cafe" : "food"),
+          distance: dist,
+          address: place.road_address_name || place.address_name || "",
+          phone: place.phone || "",
+          url: place.place_url || "",
+          x: lng,
+          y: lat
+        };
+      }
 
       function finish() {
         ui.loadingPlaces = false;
-        var items = Object.keys(collected).map(function (k) { return collected[k]; })
-          .filter(function (p) { return p.distance <= Math.round(ui.places.radius * 1.05); })
-          .sort(function (a, b) { return a.distance - b.distance; });
-        // '전체'는 카페를 빼고 음식점만 남긴다 (카페는 '카페·디저트'를 고를 때만)
-        if (ui.places.category === "all") {
-          items = items.filter(function (p) { return !isCafePlace(p); });
-        } else if (ui.places.category !== "cafe") {
-          // 분류를 고르면 그 분류 음식점만 남긴다
-          var label = CAT_LABEL[ui.places.category] || "";
-          items = items.filter(function (p) { return String(p.category || "").indexOf(label) >= 0; });
-        }
+        var raw = Object.keys(collected).map(function (k) { return collected[k]; })
+          .filter(function (p) { return p.distance <= Math.round(ui.places.radius * 1.05); });
+        // NEW 뱃지는 '이전에 이 동네에서 조회했던 id' 와 비교해 달린다
+        if (isNewView()) raw = markNewPlaces(raw, ui.places.lat, ui.places.lng);
+        else raw.forEach(function (p) { p.isNew = false; });
+        var items = raw.filter(placeMatchesCategory);
+        items.sort(isNewView() ? compareNewest : compareDistance);
         ui.places.items = items;
         var keep = {};
         items.forEach(function (p) { keep[p.id] = true; });
@@ -860,7 +992,11 @@
         renderPlaces();
         renderPlaceResult();
         drawMap();
-        if (!ui.places.items.length) toast("이 반경에는 음식점이 없어요. 반경을 넓혀 보세요.");
+        if (!ui.places.items.length) {
+          toast(isNewView()
+            ? "이 반경에서 새로 생긴 식당을 찾지 못했어요. 반경을 넓혀 보세요."
+            : "이 반경에는 음식점이 없어요. 반경을 넓혀 보세요.");
+        }
       }
 
       function done() {
@@ -879,30 +1015,34 @@
           };
           var handle = function (data, status) {
             if (status === services.Status.OK && data) {
-              data.forEach(function (place) {
-                var id = String(place.id || (place.place_name + "|" + place.x + "," + place.y));
-                if (collected[id]) return;
-                var lat = Number(place.y), lng = Number(place.x);
-                var dist = (isFinite(lat) && isFinite(lng))
-                  ? haversine(ui.places.lat, ui.places.lng, lat, lng)
-                  : (Number(place.distance) || 0);
-                collected[id] = {
-                  id: id,
-                  name: place.place_name,
-                  category: place.category_name || "",
-                  kind: q.kind,
-                  distance: dist,
-                  address: place.road_address_name || place.address_name || "",
-                  phone: place.phone || "",
-                  url: place.place_url || "",
-                  x: lng,
-                  y: lat
-                };
-              });
+              data.forEach(function (place) { addPlace(place, q.kind); });
             }
             done();
           };
           try { ps.categorySearch(q.code, handle, options); }
+          catch (e) { handle([], "ERROR"); }
+        });
+      });
+
+      // 신규 키워드 보강 — 반경 안 + 음식점만. 이미 찾은 가게는 addPlace 에서 중복 제거된다
+      keywords.forEach(function (kw) {
+        centers.forEach(function (c) {
+          var ps = new services.Places();
+          var options = {
+            location: new maps.LatLng(c.lat, c.lng),
+            radius: Math.min(ui.places.radius, 20000)
+          };
+          var handle = function (data, status) {
+            if (status === services.Status.OK && data) {
+              data.forEach(function (place) {
+                // 키워드 검색은 엉뚱한 업종도 섞여 온다 → 음식점(카페 포함)만 남긴다
+                if (String(place.category_name || "").indexOf("음식점") < 0) return;
+                addPlace(place);
+              });
+            }
+            done();
+          };
+          try { ps.keywordSearch(kw, handle, options); }
           catch (e) { handle([], "ERROR"); }
         });
       });
@@ -989,6 +1129,18 @@
     if (ui.places.lat !== null && ui.places.items.length) findPlaces();
   }
 
+  // 🍽️ 전체 맛집 ↔ 🆕 새로 생긴 식당
+  function setPlaceView(view) {
+    var next = view === "new" ? "new" : "all";
+    if (ui.places.view === next) { renderPlaces(); return; }
+    ui.places.view = next;
+    savePlaces();
+    renderPlaces();
+    renderPlaceResult();
+    // 새로 생긴 식당 모드는 신규 키워드까지 다시 찾아야 해서 재조회한다
+    if (ui.places.lat !== null) findPlaces();
+  }
+
   /* ---------------- 렌더 전체 ---------------- */
   function renderAll() {
     renderTabs();
@@ -1046,6 +1198,7 @@
       case "find-places": findPlaces(); break;
       case "set-radius": setRadius(el.getAttribute("data-radius")); break;
       case "filter-place": setPlaceCategory(el.getAttribute("data-cat") || "all"); break;
+      case "filter-view": setPlaceView(el.getAttribute("data-view") || "all"); break;
       case "toggle-place": togglePlaceExclude(id); break;
       case "draw-place": drawPlace(); break;
       default: break;
@@ -1134,7 +1287,26 @@
       categories: CATS,
       normalizeState: normalizeState,
       emptyState: emptyState,
-      ensureDefaults: ensureDefaults
+      ensureDefaults: ensureDefaults,
+      // 🆕 새로 생긴 식당 관련 손잡이
+      setPlaceView: setPlaceView,
+      setPlaceCategory: setPlaceCategory,
+      findPlaces: findPlaces,
+      getPlaces: function () { return ui.places; },
+      filteredPlaces: filteredPlaces,
+      displayPlaces: displayPlaces,
+      placePool: placePool,
+      placeMatchesCategory: placeMatchesCategory,
+      isCafePlace: isCafePlace,
+      isNewView: isNewView,
+      placeIdValue: placeIdValue,
+      sortByNewest: sortByNewest,
+      gridKey: gridKey,
+      markNewPlaces: markNewPlaces,
+      loadNewSnapshots: loadNewSnapshots,
+      NEW_KEYWORDS: NEW_KEYWORDS,
+      NEW_NOTE: NEW_NOTE,
+      NEW_SNAPSHOT_KEY: NEW_SNAPSHOT_KEY
     }
   };
 

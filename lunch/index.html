@@ -117,6 +117,13 @@
           <button type="button" class="btn-ghost" data-action="find-places">🔄 주변 맛집 찾기</button>
         </div>
 
+        <div class="control-group">
+          <p class="control-label">보기</p>
+          <div class="chips" id="viewChips"></div>
+          <p class="new-note" id="newNote" hidden>카카오맵 최신 등록 추정순·신규 키워드 기반 (정확한 개업일은 미제공)<br>
+            <span class="new-note-sub"><b class="new-badge">NEW</b> 는 이전 조회에 없던 곳이에요.</span></p>
+        </div>
+
         <div class="search-row">
           <input id="placeQuery" type="text" placeholder="동네·주소 검색 (예: 분당 정자동, 판교역)" autocomplete="off">
           <button type="button" class="btn-ghost" data-action="search-address">검색</button>
@@ -136,7 +143,7 @@
         <div class="draw-stage">
           <div class="slot" id="restSlot">어디 갈까?</div>
         </div>
-        <button type="button" class="btn-primary btn-draw" id="restDrawBtn" data-action="draw-place">🎲 주변 맛집 랜덤 추첨</button>
+        <button type="button" class="btn-primary btn-draw" id="restDrawBtn" data-action="draw-place">🎲 <span id="restDrawLabel">주변 맛집</span> 랜덤 추첨</button>
         <p class="draw-hint">목록에서 ‘빼기’를 체크한 곳은 추첨에서 빠져요.</p>
         <div class="result-card" id="restResult" hidden></div>
       </div>
